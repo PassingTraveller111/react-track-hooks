@@ -1,0 +1,15 @@
+# 目录
+node_modules/
+src/
+.DS_Store
+.git/
+.github/
+
+# 文件
+*.log
+*.tmp
+rollup.config.js
+tsconfig.json
+.gitignore
+.env
+.npmrc
