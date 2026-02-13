@@ -159,7 +159,6 @@ const useTrack = (params, config = {}) => {
     }, [mergedConfig]);
     return { triggerTrack };
 };
-// 以下 Hooks 代码无需修改（useTrackClick/useTrackExposure 等），因为它们基于 useTrack 封装
 const useTrackClick = (eventName, customParams = {}, config = {}) => {
     const { triggerTrack } = useTrack({ eventName, type: TrackType.CLICK, ...customParams }, config);
     const handleClick = useCallback((e, extraParams = {}) => {

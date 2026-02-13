@@ -14,7 +14,7 @@ export declare const useTrack: (params: TrackParams, config?: TrackConfig) => {
     triggerTrack: (customParams?: {}) => void;
 };
 export declare const useTrackClick: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => (e?: React.MouseEvent, extraParams?: {}) => void;
-export declare const useTrackExposure: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => import("react").RefObject<HTMLElement>;
+export declare const useTrackExposure: <T extends HTMLElement = HTMLElement>(eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => import("react").RefObject<T>;
 export declare const useTrackPageStay: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => void;
 export declare const useTrackCustom: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => (customParams?: {}) => void;
 export declare const useTrackRetryListener: () => void;

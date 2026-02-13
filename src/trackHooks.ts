@@ -160,7 +160,6 @@ export const useTrack = (params: TrackParams, config: TrackConfig = {}) => {
     return { triggerTrack };
 };
 
-// 以下 Hooks 代码无需修改（useTrackClick/useTrackExposure 等），因为它们基于 useTrack 封装
 export const useTrackClick = (
     eventName: string,
     customParams: Record<string, any> = {},
@@ -179,7 +178,7 @@ export const useTrackClick = (
     return handleClick;
 };
 
-export const useTrackExposure = (
+export const useTrackExposure = <T extends HTMLElement = HTMLElement>(
     eventName: string,
     customParams: Record<string, any> = {},
     config: TrackConfig = {}
@@ -190,7 +189,7 @@ export const useTrackExposure = (
         mergedConfig
     );
 
-    const targetRef = useRef<HTMLElement>(null);
+    const targetRef = useRef<T>(null);
     const hasReported = useRef(false);
 
     useEffect(() => {

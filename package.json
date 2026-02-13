@@ -1,6 +1,6 @@
 {
   "name": "react-track-hooks",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "React 埋点 Hooks 库，支持点击、曝光、页面停留时长埋点及失败重试",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
