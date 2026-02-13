@@ -114,7 +114,7 @@ import { useTrackExposure } from 'react-track-hooks';
 
 function CardComponent() {
     // 初始化曝光埋点（返回 ref 绑定到目标元素）
-    const exposureRef = useTrackExposure(
+    const exposureRef = useTrackExposure<HTMLDivElement>(
         'card_exposure', // 埋点事件名
         { card_id: '123456', card_type: 'product' }, // 基础参数
         {
@@ -213,13 +213,17 @@ function RetryButton() {
 | config | TrackItemConfig | 否 | 单个埋点配置 |
 | 返回值 | (e?, extraParams?) => void | - | 点击事件处理函数，可追加动态参数 |
 
-#### useTrackExposure(eventName, baseParams?, config?)
+
+#### useTrackExposure<T extends HTMLElement>(eventName, baseParams?, config?)
+通用曝光埋点 Hook，返回泛型 ref，可绑定到任意 DOM 元素，元素进入视口时触发埋点上报。
+
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | eventName | string | 是 | 埋点事件名 |
-| baseParams | TrackParams | 否 | 基础业务参数 |
-| config | TrackExposureConfig | 否 | 曝光配置 |
-| 返回值 | React.RefObject<HTMLElement> | - | 需绑定到目标元素的 ref |
+| baseParams | TrackParams | 否 | 基础业务参数，会和曝光自动采集参数合并上报 |
+| config | TrackExposureConfig | 否 | 曝光配置（如触发阈值、是否仅上报一次等） |
+| 泛型 T | T extends HTMLElement | 否 | 可选，指定 ref 绑定的 DOM 元素类型（默认 `HTMLElement`） |
+| 返回值 | React.RefObject<T> | - | 需绑定到目标元素的 ref，类型与泛型 T 一致 |
 
 #### TrackExposureConfig 类型
 | 参数 | 类型 | 默认值 | 说明 |
