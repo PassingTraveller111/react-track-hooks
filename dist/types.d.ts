@@ -11,11 +11,17 @@ export interface TrackParams {
 }
 export interface TrackGlobalConfig {
     trackUrl: string;
+    batchTrackUrl?: string;
     enable?: boolean;
+    enableBatch?: boolean;
     retryConfig?: {
         maxRetryTimes: number;
         initialDelay: number;
         delayMultiplier: number;
+    };
+    batchConfig?: {
+        batchSize: number;
+        batchInterval: number;
     };
 }
 export interface TrackConfig extends Partial<TrackGlobalConfig> {

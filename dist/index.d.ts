@@ -13,11 +13,17 @@ interface TrackParams {
 }
 interface TrackGlobalConfig {
     trackUrl: string;
+    batchTrackUrl?: string;
     enable?: boolean;
+    enableBatch?: boolean;
     retryConfig?: {
         maxRetryTimes: number;
         initialDelay: number;
         delayMultiplier: number;
+    };
+    batchConfig?: {
+        batchSize: number;
+        batchInterval: number;
     };
 }
 interface TrackConfig extends Partial<TrackGlobalConfig> {
@@ -34,12 +40,7 @@ interface FailedTrackParams extends TrackParams {
  * @param config 全局配置
  */
 declare const setTrackGlobalConfig: (config: Partial<TrackGlobalConfig>) => void;
-declare const getFailedTracks: () => FailedTrackParams[];
-declare const saveFailedTracks: (tracks: FailedTrackParams[]) => void;
-/**
- * 重试失败的埋点（使用全局配置的 trackUrl）
- */
-declare const retryFailedTracks: (force?: boolean) => Promise<void>;
+declare const getMergedDefaultConfig: () => TrackConfig;
 declare const useTrack: (params: TrackParams, config?: TrackConfig) => {
     triggerTrack: (customParams?: {}) => void;
 };
@@ -47,7 +48,13 @@ declare const useTrackClick: (eventName: string, customParams?: Record<string, a
 declare const useTrackExposure: <T extends HTMLElement = HTMLElement>(eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => react.RefObject<T>;
 declare const useTrackPageStay: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => void;
 declare const useTrackCustom: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => (customParams?: {}) => void;
+declare const getFailedTracks: () => FailedTrackParams[];
+declare const saveFailedTracks: (tracks: FailedTrackParams[]) => void;
+/**
+ * 重试失败的埋点
+ */
+declare const retryFailedTracks: (force?: boolean) => Promise<void>;
 declare const useTrackRetryListener: () => void;
 
-export { TrackType, getFailedTracks, retryFailedTracks, saveFailedTracks, setTrackGlobalConfig, useTrack, useTrackClick, useTrackCustom, useTrackExposure, useTrackPageStay, useTrackRetryListener };
+export { TrackType, getFailedTracks, getMergedDefaultConfig, retryFailedTracks, saveFailedTracks, setTrackGlobalConfig, useTrack, useTrackClick, useTrackCustom, useTrackExposure, useTrackPageStay, useTrackRetryListener };
 export type { FailedTrackParams, TrackConfig, TrackGlobalConfig, TrackParams };
