@@ -38,19 +38,23 @@ import { setTrackGlobalConfig, useTrackRetryListener } from 'react-track-hooks';
 function App() {
     // 全局埋点配置（只执行一次）
     setTrackGlobalConfig({
-        trackUrl: 'https://api.yourdomain.com/track', // 单条埋点上报接口
-        batchTrackUrl: 'https://api.yourdomain.com/track/batch', // 批量埋点上报接口（可选）
-        enable: process.env.NODE_ENV === 'production', // 生产环境开启
-        enableBatch: true, // 全局开启批量上报
-        retryConfig: {
-            maxRetryTimes: 5, // 最大重试次数
-            initialDelay: 1000, // 初始重试延迟（ms）
-            delayMultiplier: 2, // 延迟倍数（指数退避）
-        },
-        batchConfig: {
-            batchSize: 10, // 队列达到10条时触发批量上报
-            batchInterval: 5000, // 每5秒触发一次批量上报
-        }
+       trackUrl: '/api/track',
+       batchTrackUrl: '/api/track/batch',
+       enable: true,
+       enableBatch: true,
+       retryConfig: {
+          maxRetryTimes: 3,
+          initialDelay: 1000,
+          delayMultiplier: 2
+       },
+       batchConfig: {
+          batchSize: 10,
+          batchInterval: 5000,
+       },
+       exposureConfig: {
+          exposureOnce: true,
+          exposureThreshold: 0.5,
+       }
     });
 
     // 启用失败埋点自动重试监听（全局只执行一次）
@@ -313,7 +317,11 @@ export interface TrackGlobalConfig {
     batchConfig?: {
         batchSize: number, // 队列容量上限
         batchInterval: number, // 触发上报间隔
-    }
+    };
+   exposureConfig?: {
+      exposureOnce?: boolean; // 暴露是否只触发一次
+      exposureThreshold?: number; // 元素暴露多少部分（0-1）触发
+   }
 }
 ```
 

@@ -9,6 +9,55 @@ var TrackType;
     TrackType["CUSTOM"] = "custom";
 })(TrackType || (TrackType = {}));
 
+// 定义默认配置（私有，不对外暴露）
+const DEFAULT_TRACK_CONFIG = {
+    trackUrl: '/api/track',
+    batchTrackUrl: '/api/track/batch',
+    enable: true,
+    enableBatch: true,
+    retryConfig: {
+        maxRetryTimes: 3,
+        initialDelay: 1000,
+        delayMultiplier: 2
+    },
+    batchConfig: {
+        batchSize: 10,
+        batchInterval: 5000,
+    },
+    exposureConfig: {
+        exposureOnce: true,
+        exposureThreshold: 0.5,
+    }
+};
+// 私有全局配置（仅内部可直接访问）
+let _GLOBAL_TRACK_CONFIG = { ...DEFAULT_TRACK_CONFIG };
+/**
+ * 设置全局埋点配置（对外暴露的核心API）
+ * @param config 要覆盖的配置（支持部分覆盖）
+ * @returns 最新的全局配置（只读副本）
+ */
+const setTrackGlobalConfig = (config) => {
+    if (typeof config !== 'object' || config === null) {
+        console.warn('setTrackGlobalConfig 入参必须为对象，已忽略');
+        return getTrackGlobalConfig();
+    }
+    // 分步合并配置，同时做合法性校验
+    _GLOBAL_TRACK_CONFIG = {
+        ..._GLOBAL_TRACK_CONFIG,
+        ...config,
+    };
+    console.debug('全局埋点配置已更新：', _GLOBAL_TRACK_CONFIG);
+    return getTrackGlobalConfig();
+};
+/**
+ * 获取当前全局埋点配置（返回只读副本，防止外部修改）
+ * @returns 只读的全局配置对象
+ */
+const getTrackGlobalConfig = () => {
+    // 使用 Object.freeze 冻结对象，防止外部篡改
+    return Object.freeze({ ..._GLOBAL_TRACK_CONFIG });
+};
+
 // 环境判断工具函数
 const isClient = () => {
     return typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -38,197 +87,14 @@ const safeLocalStorageSet = (key, data) => {
     }
 };
 
-// src/trackHooks.ts
-// 全局配置（默认值），并提供修改全局配置的方法
-let GLOBAL_TRACK_CONFIG = {
-    trackUrl: '/api/track', // 默认上报地址
-    batchTrackUrl: '/api/track/batch', // 批量上报地址
-    enable: true,
-    enableBatch: true, // 是否开启批量上报
-    retryConfig: {
-        maxRetryTimes: 3,
-        initialDelay: 1000,
-        delayMultiplier: 2
-    },
-    // 批量上报配置
-    batchConfig: {
-        batchSize: 10, // 队列达到10条时触发上报
-        batchInterval: 5000, // 每5秒触发一次上报
-    }
-};
 /**
- * 设置全局埋点配置（项目初始化时调用一次即可）
- * @param config 全局配置
+ * 重试流程互斥锁 - 防止同时触发多次重试，避免并发问题
  */
-const setTrackGlobalConfig = (config) => {
-    GLOBAL_TRACK_CONFIG = { ...GLOBAL_TRACK_CONFIG, ...config };
-};
-// 2. 调整默认配置，合并全局配置
-const getMergedDefaultConfig = () => ({
-    exposureOnce: true,
-    exposureThreshold: 0.5,
-    ...GLOBAL_TRACK_CONFIG // 继承全局配置（trackUrl、enable、retryConfig）
-});
-/**
- * 通用埋点发送函数（支持单个 Hook 覆盖 trackUrl）
- * @param params 埋点参数
- * @param config 单个 Hook 的配置（可覆盖 trackUrl）
- */
-const sendTrack = async (params, config) => {
-    var _a, _b, _c, _d, _e;
-    // 服务端不执行
-    if (!isClient())
-        return;
-    if (!params.eventName) {
-        console.warn('埋点缺少必要参数：eventName');
-        return;
-    }
-    // 优先级：单个 Hook 配置 > 全局配置
-    const finalTrackUrl = config.trackUrl || GLOBAL_TRACK_CONFIG.trackUrl;
-    const isEnable = (_a = config.enable) !== null && _a !== void 0 ? _a : GLOBAL_TRACK_CONFIG.enable;
-    if (!isEnable)
-        return;
-    // 判断批量模式（单个Hook配置 > 全局配置）
-    const enableBatch = (_c = (_b = config === null || config === void 0 ? void 0 : config.enableBatch) !== null && _b !== void 0 ? _b : GLOBAL_TRACK_CONFIG === null || GLOBAL_TRACK_CONFIG === void 0 ? void 0 : GLOBAL_TRACK_CONFIG.enableBatch) !== null && _c !== void 0 ? _c : true;
-    if (enableBatch) {
-        // 批量模式：入队 + 触发调度
-        BATCH_TRACK_QUEUE.push(params);
-        initBatchTimer(config);
-        if (BATCH_TRACK_QUEUE.length >= ((_e = (_d = GLOBAL_TRACK_CONFIG.batchConfig) === null || _d === void 0 ? void 0 : _d.batchSize) !== null && _e !== void 0 ? _e : 10)) {
-            processBatchQueue(config);
-        }
-        return;
-    }
-    try {
-        // 使用最终确定的 trackUrl 发送请求
-        const response = await fetch(finalTrackUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ...params,
-                timestamp: Date.now(),
-                userAgent: navigator.userAgent,
-                url: window.location.href,
-                referrer: document.referrer
-            })
-        });
-        if (!response.ok) {
-            // 抛出包含状态码的异常，便于调试
-            throw new Error(`HTTP 请求失败，状态码：${response.status}`);
-        }
-        console.log('埋点上报成功：', params);
-        if (window.requestIdleCallback) {
-            window.requestIdleCallback(() => retryFailedTracks(), { timeout: 2000 });
-        }
-        else {
-            setTimeout(() => retryFailedTracks(), 1000);
-        }
-    }
-    catch (error) {
-        console.error('埋点上报失败：', error);
-        const failedTracks = getFailedTracks();
-        failedTracks.push({
-            id: `${params.eventName}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-            ...params,
-            retryTime: Date.now(),
-            retryCount: 0
-        });
-        saveFailedTracks(failedTracks);
-    }
-};
-// ---------------------- 核心 Hooks 实现 ----------------------
-const useTrack = (params, config = {}) => {
-    // 合并默认配置（含全局配置）和单个 Hook 配置
-    const mergedConfig = { ...getMergedDefaultConfig(), ...config };
-    const trackRef = useRef(params);
-    useEffect(() => {
-        trackRef.current = params;
-    }, [params]);
-    const triggerTrack = useCallback((customParams = {}) => {
-        const finalParams = {
-            ...trackRef.current,
-            ...customParams
-        };
-        // 把 mergedConfig 传给 sendTrack，支持覆盖 trackUrl
-        sendTrack(finalParams, mergedConfig);
-    }, [mergedConfig]);
-    return { triggerTrack };
-};
-const useTrackClick = (eventName, customParams = {}, config = {}) => {
-    const { triggerTrack } = useTrack({ eventName, type: TrackType.CLICK, ...customParams }, config);
-    const handleClick = useCallback((e, extraParams = {}) => {
-        const clickParams = { clientX: (e === null || e === void 0 ? void 0 : e.clientX) || 0, clientY: (e === null || e === void 0 ? void 0 : e.clientY) || 0, ...extraParams };
-        triggerTrack(clickParams);
-    }, [triggerTrack]);
-    return handleClick;
-};
-const useTrackExposure = (eventName, customParams = {}, config = {}) => {
-    const mergedConfig = { ...getMergedDefaultConfig(), ...config };
-    const { triggerTrack } = useTrack({ eventName, type: TrackType.EXPOSURE, ...customParams }, mergedConfig);
-    const targetRef = useRef(null);
-    const hasReported = useRef(false);
-    useEffect(() => {
-        if (!mergedConfig.enable)
-            return;
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting && !hasReported.current) {
-                    const exposureParams = {
-                        intersectionRatio: entry.intersectionRatio,
-                        boundingClientRect: entry.boundingClientRect,
-                        exposureTime: Date.now()
-                    };
-                    triggerTrack(exposureParams);
-                    if (mergedConfig.exposureOnce) {
-                        hasReported.current = true;
-                        observer.unobserve(entry.target);
-                    }
-                }
-            });
-        }, { threshold: mergedConfig.exposureThreshold });
-        const target = targetRef.current;
-        if (target)
-            observer.observe(target);
-        return () => {
-            if (target)
-                observer.unobserve(target);
-            observer.disconnect();
-        };
-    }, [mergedConfig, triggerTrack]);
-    return targetRef;
-};
-const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
-    const { triggerTrack } = useTrack({ eventName, type: TrackType.PAGE_STAY, ...customParams }, config);
-    const startTime = useRef(Date.now());
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.hidden) {
-                const stayTime = Date.now() - startTime.current;
-                triggerTrack({ stayTime });
-            }
-            else {
-                startTime.current = Date.now();
-            }
-        };
-        const handleBeforeUnload = () => {
-            const stayTime = Date.now() - startTime.current;
-            triggerTrack({ stayTime });
-        };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-        };
-    }, [triggerTrack]);
-};
-const useTrackCustom = (eventName, customParams = {}, config = {}) => {
-    const { triggerTrack } = useTrack({ eventName, type: TrackType.CUSTOM, ...customParams }, config);
-    return triggerTrack;
-};
-// ---------------------- 重试核心逻辑 ----------------------
-// 重试互斥锁，防止同时触发多次重试
 let isRetryRunning = false;
+/**
+ * 从 localStorage 中读取失败的埋点数据
+ * @returns 失败埋点数组（解析失败/数据异常时返回空数组）
+ */
 const getFailedTracks = () => {
     if (!isClient())
         return [];
@@ -251,6 +117,10 @@ const getFailedTracks = () => {
         return [];
     }
 };
+/**
+ * 将失败的埋点数据保存到 localStorage
+ * @param tracks 待保存的失败埋点数组
+ */
 const saveFailedTracks = (tracks) => {
     if (!isClient())
         return;
@@ -262,7 +132,9 @@ const saveFailedTracks = (tracks) => {
     }
 };
 /**
- * 重试失败的埋点
+ * 重试失败的埋点数据（核心重试逻辑）
+ * @param force 是否强制重试（忽略指数退避时间，默认：false）
+ * @returns Promise<void> 重试流程的异步结果
  */
 const retryFailedTracks = async (force = false) => {
     if (!isClient())
@@ -276,6 +148,7 @@ const retryFailedTracks = async (force = false) => {
         let failedTracks = getFailedTracks();
         if (failedTracks.length === 0)
             return;
+        const GLOBAL_TRACK_CONFIG = getTrackGlobalConfig();
         const { retryConfig = { maxRetryTimes: 3, initialDelay: 1000, delayMultiplier: 2 }, trackUrl, batchTrackUrl = trackUrl, // 批量接口默认使用单条接口
         enableBatch = false } = GLOBAL_TRACK_CONFIG;
         // 移除重复的默认值处理（前面已给retryConfig设默认值）
@@ -381,68 +254,7 @@ const retryFailedTracks = async (force = false) => {
         isRetryRunning = false;
     }
 };
-// 单例锁（全局变量）
-let isRetryListenerRegistered = false;
-const useTrackRetryListener = () => {
-    useEffect(() => {
-        // 单例拦截：已注册过则直接返回
-        if (isRetryListenerRegistered)
-            return;
-        isRetryListenerRegistered = true;
-        // 1.首屏渲染3秒后进行重试
-        const initTimer = setTimeout(() => retryFailedTracks(), 3000);
-        // 2.页面切换监听 不可见->可见 进行重试
-        const handleVisibilityChange = () => {
-            if (!document.hidden) {
-                retryFailedTracks();
-            }
-        };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        // 3.周期性进行浏览器空闲重试，最迟30秒也会执行一次
-        let idleCallbackId = null; // 空闲执行id
-        let intervalId = null; // 定时器id
-        const checkIdleRetry = () => {
-            // 先检查失败队列是否为空
-            const failedTracks = getFailedTracks();
-            if (failedTracks.length === 0) {
-                // 队列为空时，延迟1分钟再预约（减少空跑）
-                setTimeout(() => {
-                    if (window.requestIdleCallback) {
-                        idleCallbackId = window.requestIdleCallback(checkIdleRetry, { timeout: 30000 });
-                    }
-                }, 60000);
-                return;
-            }
-            // 进行失败重试
-            retryFailedTracks();
-            // 注册下一次的空闲回调
-            if (window.requestIdleCallback) {
-                idleCallbackId = window.requestIdleCallback(checkIdleRetry, { timeout: 30000 });
-            }
-        };
-        // 启用首次空闲回调
-        if (window.requestIdleCallback) {
-            idleCallbackId = window.requestIdleCallback(checkIdleRetry, { timeout: 30000 });
-        }
-        else { // 防止浏览器不支持requestIdleCallback，兜底。每30秒执行一次
-            intervalId = window.setInterval(retryFailedTracks, 30000);
-        }
-        return () => {
-            // 清理首屏定时器
-            if (initTimer)
-                clearTimeout(initTimer);
-            // 清理监听
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            // 清理空闲/周期重试
-            if (intervalId)
-                window.clearInterval(intervalId);
-            if (idleCallbackId !== null && window.cancelIdleCallback) {
-                window.cancelIdleCallback(idleCallbackId);
-            }
-        };
-    }, []);
-};
-// ---------------------- 批量上报核心逻辑 ----------------------
+
 // 内存中的批量上报队列
 let BATCH_TRACK_QUEUE = [];
 // 批量上报定时器
@@ -458,6 +270,7 @@ const sendBatchTrack = async (tracks, config) => {
     var _a;
     if (tracks.length === 0)
         return;
+    const GLOBAL_TRACK_CONFIG = getTrackGlobalConfig();
     // 优先级：单个 Hook 配置 > 全局配置
     const finalBatchUrl = config.batchTrackUrl || GLOBAL_TRACK_CONFIG.batchTrackUrl || GLOBAL_TRACK_CONFIG.trackUrl;
     const isEnable = (_a = config.enable) !== null && _a !== void 0 ? _a : GLOBAL_TRACK_CONFIG.enable;
@@ -562,6 +375,7 @@ const initBatchTimer = (config) => {
     if (BATCH_TIMER) {
         clearTimeout(BATCH_TIMER);
     }
+    const GLOBAL_TRACK_CONFIG = getTrackGlobalConfig();
     const { batchConfig } = GLOBAL_TRACK_CONFIG;
     if (!(GLOBAL_TRACK_CONFIG === null || GLOBAL_TRACK_CONFIG === void 0 ? void 0 : GLOBAL_TRACK_CONFIG.enableBatch))
         return;
@@ -571,5 +385,275 @@ const initBatchTimer = (config) => {
     }, (batchConfig === null || batchConfig === void 0 ? void 0 : batchConfig.batchInterval) || 5000);
 };
 
-export { TrackType, getFailedTracks, getMergedDefaultConfig, retryFailedTracks, saveFailedTracks, setTrackGlobalConfig, useTrack, useTrackClick, useTrackCustom, useTrackExposure, useTrackPageStay, useTrackRetryListener };
+/**
+ * 通用埋点发送函数（支持单个 Hook 覆盖 trackUrl）
+ * @param params 埋点参数
+ * @param config 单个 Hook 的配置（可覆盖 trackUrl）
+ */
+const sendTrack = async (params, config) => {
+    var _a, _b, _c, _d, _e;
+    // 服务端不执行
+    if (!isClient())
+        return;
+    if (!params.eventName) {
+        console.warn('埋点缺少必要参数：eventName');
+        return;
+    }
+    const GLOBAL_TRACK_CONFIG = getTrackGlobalConfig();
+    // 优先级：单个 Hook 配置 > 全局配置
+    const finalTrackUrl = config.trackUrl || GLOBAL_TRACK_CONFIG.trackUrl;
+    const isEnable = (_a = config.enable) !== null && _a !== void 0 ? _a : GLOBAL_TRACK_CONFIG.enable;
+    if (!isEnable)
+        return;
+    // 判断批量模式（单个Hook配置 > 全局配置）
+    const enableBatch = (_c = (_b = config === null || config === void 0 ? void 0 : config.enableBatch) !== null && _b !== void 0 ? _b : GLOBAL_TRACK_CONFIG === null || GLOBAL_TRACK_CONFIG === void 0 ? void 0 : GLOBAL_TRACK_CONFIG.enableBatch) !== null && _c !== void 0 ? _c : true;
+    if (enableBatch) {
+        // 批量模式：入队 + 触发调度
+        BATCH_TRACK_QUEUE.push(params);
+        initBatchTimer(config);
+        if (BATCH_TRACK_QUEUE.length >= ((_e = (_d = GLOBAL_TRACK_CONFIG.batchConfig) === null || _d === void 0 ? void 0 : _d.batchSize) !== null && _e !== void 0 ? _e : 10)) {
+            processBatchQueue(config);
+        }
+        return;
+    }
+    try {
+        // 使用最终确定的 trackUrl 发送请求
+        const response = await fetch(finalTrackUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ...params,
+                timestamp: Date.now(),
+                userAgent: navigator.userAgent,
+                url: window.location.href,
+                referrer: document.referrer
+            })
+        });
+        if (!response.ok) {
+            // 抛出包含状态码的异常，便于调试
+            throw new Error(`HTTP 请求失败，状态码：${response.status}`);
+        }
+        console.log('埋点上报成功：', params);
+        if (window.requestIdleCallback) {
+            window.requestIdleCallback(() => retryFailedTracks(), { timeout: 2000 });
+        }
+        else {
+            setTimeout(() => retryFailedTracks(), 1000);
+        }
+    }
+    catch (error) {
+        console.error('埋点上报失败：', error);
+        const failedTracks = getFailedTracks();
+        failedTracks.push({
+            id: `${params.eventName}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            ...params,
+            retryTime: Date.now(),
+            retryCount: 0
+        });
+        saveFailedTracks(failedTracks);
+    }
+};
+
+/**
+ * 基础埋点 Hook - 封装通用埋点逻辑，返回触发埋点的方法
+ * @param params 埋点基础参数（事件名、类型、自定义参数等）
+ * @param config 埋点配置项（可选，会合并全局默认配置）
+ * @returns 包含触发埋点方法的对象
+ */
+const useTrack = (params, config = {}) => {
+    // 合并默认配置（含全局配置）和单个 Hook 配置
+    const mergedConfig = { ...getTrackGlobalConfig(), ...config };
+    const trackRef = useRef(params);
+    useEffect(() => {
+        trackRef.current = params;
+    }, [params]);
+    const triggerTrack = useCallback((customParams = {}) => {
+        const finalParams = {
+            ...trackRef.current,
+            ...customParams
+        };
+        // 把 mergedConfig 传给 sendTrack，支持覆盖 trackUrl
+        sendTrack(finalParams, mergedConfig);
+    }, [mergedConfig]);
+    return { triggerTrack };
+};
+
+/**
+ * 点击埋点 Hook - 封装点击事件的埋点逻辑，返回点击处理函数
+ * @param eventName 点击事件名称（必填）
+ * @param customParams 自定义埋点参数（可选）
+ * @param config 埋点配置项（可选）
+ * @returns 点击事件处理函数（支持接收鼠标事件和额外参数）
+ */
+const useTrackClick = (eventName, customParams = {}, config = {}) => {
+    const { triggerTrack } = useTrack({ eventName, type: TrackType.CLICK, ...customParams }, config);
+    const handleClick = useCallback((e, extraParams = {}) => {
+        const clickParams = { clientX: (e === null || e === void 0 ? void 0 : e.clientX) || 0, clientY: (e === null || e === void 0 ? void 0 : e.clientY) || 0, ...extraParams };
+        triggerTrack(clickParams);
+    }, [triggerTrack]);
+    return handleClick;
+};
+
+/**
+ * 自定义埋点 Hook - 简化自定义类型埋点的调用，直接返回触发方法
+ * @param eventName 自定义事件名称（必填）
+ * @param customParams 自定义埋点参数（可选）
+ * @param config 埋点配置项（可选）
+ * @returns 触发自定义埋点的方法
+ */
+const useTrackCustom = (eventName, customParams = {}, config = {}) => {
+    const { triggerTrack } = useTrack({ eventName, type: TrackType.CUSTOM, ...customParams }, config);
+    return triggerTrack;
+};
+
+/**
+ * 曝光埋点 Hook - 封装元素曝光埋点逻辑，返回需要监听的 DOM 引用
+ * @template T 目标元素类型（默认：HTMLElement）
+ * @param eventName 曝光事件名称（必填）
+ * @param customParams 自定义埋点参数（可选）
+ * @param config 埋点配置项（可选，支持曝光阈值、是否只上报一次等）
+ * @returns 需绑定到目标元素的 Ref 对象
+ */
+const useTrackExposure = (eventName, customParams = {}, config = {}) => {
+    const mergedConfig = { ...getTrackGlobalConfig(), ...config };
+    const { triggerTrack } = useTrack({ eventName, type: TrackType.EXPOSURE, ...customParams }, mergedConfig);
+    const targetRef = useRef(null);
+    const hasReported = useRef(false);
+    useEffect(() => {
+        if (!mergedConfig.enable)
+            return;
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting && !hasReported.current) {
+                    const exposureParams = {
+                        intersectionRatio: entry.intersectionRatio,
+                        boundingClientRect: entry.boundingClientRect,
+                        exposureTime: Date.now()
+                    };
+                    triggerTrack(exposureParams);
+                    if (mergedConfig.exposureOnce) {
+                        hasReported.current = true;
+                        observer.unobserve(entry.target);
+                    }
+                }
+            });
+        }, { threshold: mergedConfig.exposureThreshold });
+        const target = targetRef.current;
+        if (target)
+            observer.observe(target);
+        return () => {
+            if (target)
+                observer.unobserve(target);
+            observer.disconnect();
+        };
+    }, [mergedConfig, triggerTrack]);
+    return targetRef;
+};
+
+/**
+ * 页面停留时长埋点 Hook - 自动监听页面/组件的停留时长并上报
+ * @param eventName 停留时长事件名称（必填）
+ * @param customParams 自定义埋点参数（可选）
+ * @param config 埋点配置项（可选）
+ */
+const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
+    const { triggerTrack } = useTrack({ eventName, type: TrackType.PAGE_STAY, ...customParams }, config);
+    const startTime = useRef(Date.now());
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                const stayTime = Date.now() - startTime.current;
+                triggerTrack({ stayTime });
+            }
+            else {
+                startTime.current = Date.now();
+            }
+        };
+        const handleBeforeUnload = () => {
+            const stayTime = Date.now() - startTime.current;
+            triggerTrack({ stayTime });
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [triggerTrack]);
+};
+
+// 单例锁（全局变量）
+/**
+ * 重试监听注册状态锁 - 确保全局仅注册一次重试监听，避免重复绑定事件
+ */
+let isRetryListenerRegistered = false;
+/**
+ * 埋点重试监听 Hook - 自动注册多场景的失败埋点重试触发逻辑
+ * 核心能力：
+ * 1. 首屏渲染完成3秒后，触发一次失败埋点重试
+ * 2. 监听页面可见性变化（从不可见→可见），触发重试
+ * 3. 利用浏览器空闲时间周期性重试（兜底：每30秒执行一次）
+ * 注意：该 Hook 全局仅会注册一次监听，重复调用不会重复绑定事件
+ */
+const useTrackRetryListener = () => {
+    useEffect(() => {
+        // 单例拦截：已注册过则直接返回
+        if (isRetryListenerRegistered)
+            return;
+        isRetryListenerRegistered = true;
+        // 1.首屏渲染3秒后进行重试
+        const initTimer = setTimeout(() => retryFailedTracks(), 3000);
+        // 2.页面切换监听 不可见->可见 进行重试
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                retryFailedTracks();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        // 3.周期性进行浏览器空闲重试，最迟30秒也会执行一次
+        let idleCallbackId = null; // 空闲执行id
+        let intervalId = null; // 定时器id
+        const checkIdleRetry = () => {
+            // 先检查失败队列是否为空
+            const failedTracks = getFailedTracks();
+            if (failedTracks.length === 0) {
+                // 队列为空时，延迟1分钟再预约（减少空跑）
+                setTimeout(() => {
+                    if (window.requestIdleCallback) {
+                        idleCallbackId = window.requestIdleCallback(checkIdleRetry, { timeout: 30000 });
+                    }
+                }, 60000);
+                return;
+            }
+            // 进行失败重试
+            retryFailedTracks();
+            // 注册下一次的空闲回调
+            if (window.requestIdleCallback) {
+                idleCallbackId = window.requestIdleCallback(checkIdleRetry, { timeout: 30000 });
+            }
+        };
+        // 启用首次空闲回调
+        if (window.requestIdleCallback) {
+            idleCallbackId = window.requestIdleCallback(checkIdleRetry, { timeout: 30000 });
+        }
+        else { // 防止浏览器不支持requestIdleCallback，兜底。每30秒执行一次
+            intervalId = window.setInterval(retryFailedTracks, 30000);
+        }
+        return () => {
+            // 清理首屏定时器
+            if (initTimer)
+                clearTimeout(initTimer);
+            // 清理监听
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            // 清理空闲/周期重试
+            if (intervalId)
+                window.clearInterval(intervalId);
+            if (idleCallbackId !== null && window.cancelIdleCallback) {
+                window.cancelIdleCallback(idleCallbackId);
+            }
+        };
+    }, []);
+};
+
+export { TrackType, getFailedTracks, getTrackGlobalConfig, retryFailedTracks, saveFailedTracks, setTrackGlobalConfig, useTrack, useTrackClick, useTrackCustom, useTrackExposure, useTrackPageStay, useTrackRetryListener };
 //# sourceMappingURL=index.esm.js.map

@@ -23,6 +23,10 @@ export interface TrackGlobalConfig {
         batchSize: number;
         batchInterval: number;
     };
+    exposureConfig?: {
+        exposureOnce?: boolean;
+        exposureThreshold?: number;
+    };
 }
 export interface TrackConfig extends Partial<TrackGlobalConfig> {
     exposureOnce?: boolean;

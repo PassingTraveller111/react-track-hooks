@@ -33,6 +33,10 @@ export interface TrackGlobalConfig {
         batchSize: number, // 队列容量上限
         batchInterval: number, // 触发上报间隔
     }
+    exposureConfig?: {
+        exposureOnce?: boolean; // 暴露是否只触发一次
+        exposureThreshold?: number; // 元素暴露多少部分（0-1）触发
+    }
 }
 
 // TrackConfig 继承并扩展全局配置，支持单个 Hook 覆盖
