@@ -8,6 +8,7 @@ src/
 │   │   ├── useTrackClick.ts # 点击埋点Hook
 │   │   ├── useTrackExposure.ts # 曝光埋点Hook
 │   │   ├── useTrackPageStay.ts # 页面停留Hook
+│   │   ├── useFirstRender.ts # 组件首次渲染Hook
 │   │   └── useTrackCustom.ts # 自定义埋点Hook
 │   ├── core/               # 核心逻辑（非Hook的底层逻辑）
 │   │   ├── index.ts        # 核心逻辑聚合导出

@@ -9,6 +9,7 @@ exports.TrackType = void 0;
     TrackType["EXPOSURE"] = "exposure";
     TrackType["PAGE_STAY"] = "page_stay";
     TrackType["CUSTOM"] = "custom";
+    TrackType["FIRST_RENDER"] = "first_render";
 })(exports.TrackType || (exports.TrackType = {}));
 
 // 定义默认配置（私有，不对外暴露）
@@ -657,6 +658,32 @@ const useTrackRetryListener = () => {
     }, []);
 };
 
+/**
+ * 组件首次渲染埋点 Hook - 仅在组件挂载（首次渲染）时触发一次埋点
+ * @param eventName 埋点事件名称（必填）
+ * @param customParams 自定义埋点参数（可选）
+ * @param config 埋点配置项（可选，会合并全局默认配置）
+ */
+const useTrackFirstRender = (eventName, customParams = {}, config = {}) => {
+    // 复用基础埋点 Hook，指定事件类型为 FIRST_RENDER
+    const { triggerTrack } = useTrack({ eventName, type: exports.TrackType.FIRST_RENDER, ...customParams }, config);
+    // 标记是否已触发埋点，防止重复执行
+    const hasTriggered = react.useRef(false);
+    react.useEffect(() => {
+        // 非首次渲染/已触发过 → 直接返回
+        if (hasTriggered.current)
+            return;
+        // 标记为已触发
+        hasTriggered.current = true;
+        // 触发埋点（补充首次渲染专属参数）
+        triggerTrack({
+            renderTime: Date.now(), // 首次渲染时间戳
+            trackType: 'component_first_render', // 便于区分埋点类型
+        });
+        // 空依赖数组 → 仅组件挂载时执行一次
+    }, []);
+};
+
 exports.getFailedTracks = getFailedTracks;
 exports.getTrackGlobalConfig = getTrackGlobalConfig;
 exports.retryFailedTracks = retryFailedTracks;
@@ -666,6 +693,7 @@ exports.useTrack = useTrack;
 exports.useTrackClick = useTrackClick;
 exports.useTrackCustom = useTrackCustom;
 exports.useTrackExposure = useTrackExposure;
+exports.useTrackFirstRender = useTrackFirstRender;
 exports.useTrackPageStay = useTrackPageStay;
 exports.useTrackRetryListener = useTrackRetryListener;
 //# sourceMappingURL=index.cjs.js.map

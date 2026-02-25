@@ -167,6 +167,22 @@ function HomePage() {
 }
 ```
 
+#### 组件首次渲染埋点
+```tsx
+import { useTrackFirstRender } from 'react-track-hooks';
+
+function HomePage() {
+    // 组件首次渲染时触发上报
+    useTrackFirstRender(
+        'first_render', // 埋点事件名
+        { page_path: '/home', platform: 'web' }, // 基础参数
+        { enableBatch: true } // 启用批量上报
+    );
+
+    return <div>首页内容</div>;
+}
+```
+
 #### 自定义埋点
 ```tsx
 import { useTrackCustom } from 'react-track-hooks';

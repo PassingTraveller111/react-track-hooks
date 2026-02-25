@@ -3,7 +3,8 @@ export enum TrackType {
     CLICK = 'click',
     EXPOSURE = 'exposure',
     PAGE_STAY = 'page_stay',
-    CUSTOM = 'custom'
+    CUSTOM = 'custom',
+    FIRST_RENDER = 'first_render',
 }
 
 export interface TrackParams {
