@@ -169,18 +169,18 @@ function HomePage() {
 
 #### 组件首次渲染埋点
 ```tsx
-import { useTrackFirstRender } from 'react-track-hooks';
+import { useTrackFirstRender } from '@/track/hooks/useTrackFirstRender';
 
-function HomePage() {
-    // 组件首次渲染时触发上报
-    useTrackFirstRender(
-        'first_render', // 埋点事件名
-        { page_path: '/home', platform: 'web' }, // 基础参数
-        { enableBatch: true } // 启用批量上报
-    );
+const MyComponent = () => {
+   // 组件首次渲染时触发埋点
+   useTrackFirstRender(
+           'my_component_first_render', // 事件名
+           { componentName: 'MyComponent' }, // 自定义参数
+           { enableBatch: false } // 配置（比如关闭批量，立即上报）
+   );
 
-    return <div>首页内容</div>;
-}
+   return <div>我的组件</div>;
+};
 ```
 
 #### 自定义埋点
@@ -276,6 +276,14 @@ function RetryButton() {
 | eventName | string | 是 | 埋点事件名 |
 | baseParams | TrackParams | 否 | 基础业务参数 |
 | config | TrackConfig | 否 | 单个埋点配置（可覆盖全局批量/重试配置） |
+
+#### useTrackFirstRender(eventName, baseParams?, config?)
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| eventName | string | 是 | 埋点事件名 |
+| baseParams | TrackParams | 否 | 基础业务参数（如组件名称、页面标识等固定参数） |
+| config | TrackConfig | 否 | 单个埋点配置（可覆盖全局批量/重试/上报地址等配置） |
+| 返回值 | void | - | 无返回值，Hook 内部自动触发埋点，无需手动调用 |
 
 #### useTrackCustom(eventName, baseParams?, config?)
 | 参数 | 类型 | 必填 | 说明 |
