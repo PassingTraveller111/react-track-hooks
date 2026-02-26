@@ -1,5 +1,5 @@
 import {TrackConfig, TrackParams} from "../../types";
-import {isClient} from "../../utils";
+import {getEventId, isClient} from "../../utils";
 import {getTrackGlobalConfig} from "../config";
 import {BATCH_TRACK_QUEUE, initBatchTimer, processBatchQueue} from "./sendBatchTrack";
 import {getFailedTracks, retryFailedTracks, saveFailedTracks} from "./retryTrack";
@@ -67,7 +67,7 @@ export const sendTrack = async (params: TrackParams, config: TrackConfig) => {
         console.error('埋点上报失败：', error);
         const failedTracks = getFailedTracks();
         failedTracks.push({
-            id: `${params.eventName}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            id: getEventId(params.eventName),
             ...params,
             retryTime: Date.now(),
             retryCount: 0

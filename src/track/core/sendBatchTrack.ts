@@ -4,6 +4,7 @@
 import {TrackConfig, TrackParams} from "../../types";
 import {getTrackGlobalConfig} from "../config";
 import {getFailedTracks, retryFailedTracks, saveFailedTracks} from "./retryTrack";
+import {getEventId} from "../../utils";
 
 // 内存中的批量上报队列
 export let BATCH_TRACK_QUEUE: TrackParams[] = [];
@@ -92,7 +93,7 @@ export const processBatchQueue = async (config: TrackConfig) => {
             console.warn(`批量上报失败，${tracksToUpload.length}条数据转入失败队列`);
             const failedTracks = getFailedTracks();
             const newFailedTracks = tracksToUpload.map(track => ({
-                id: `${track.eventName}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                id: getEventId(track.eventName),
                 ...track,
                 retryTime: Date.now(),
                 retryCount: 0
