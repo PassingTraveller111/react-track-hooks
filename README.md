@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/react-track-hooks.svg)](https://www.npmjs.com/package/react-track-hooks)
 [![license](https://img.shields.io/npm/l/react-track-hooks.svg)](https://github.com/PassingTraveller111/react-track-hooks/blob/main/LICENSE)
 
-一个轻量、易用的 React 埋点 Hooks 库，支持点击埋点、曝光埋点、页面停留时长埋点、自定义埋点，内置**智能批量上报**和**增强型失败重试**机制，适配 React/Next.js 项目。
+一个轻量、易用的 React 埋点 Hooks 库，支持点击埋点、曝光埋点、页面停留时长埋点、组件首次渲染埋点、自定义埋点，内置**智能批量上报**和**增强型失败重试**机制，适配 React/Next.js 项目。
 
 ## 特性
 - 🚀 开箱即用：提供常用埋点场景的 Hooks，无需重复封装
