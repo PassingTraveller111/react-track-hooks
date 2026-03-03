@@ -1,5 +1,5 @@
 // 全局配置（默认值），并提供修改全局配置的方法
-import {TrackConfig, TrackGlobalConfig} from "../types";
+import { TrackGlobalConfig } from "../types";
 
 // 定义默认配置（私有，不对外暴露）
 const DEFAULT_TRACK_CONFIG: TrackGlobalConfig = {
@@ -11,15 +11,21 @@ const DEFAULT_TRACK_CONFIG: TrackGlobalConfig = {
     maxRetryTimes: 3,
         initialDelay: 1000,
         delayMultiplier: 2
-},
-batchConfig: {
-    batchSize: 10,
+    },
+    batchConfig: {
+        batchSize: 10,
         batchInterval: 5000,
-},
-exposureConfig: {
-    exposureOnce: true,
+    },
+    exposureConfig: {
+        exposureOnce: true,
         exposureThreshold: 0.5,
-}
+    },
+    pageStayConfig: {
+        timeout: 30 * 60 * 1000, // 30分钟无操作超时
+        minDuration: 2000,       // 最小有效时长2秒（低于则丢弃）
+        maxDuration: 60 * 60 * 1000, // 最大单次时长60分钟（防止异常数据）
+        checkInterval: 1000,     // 每秒检查一次活跃状态
+    }
 };
 
 // 私有全局配置（仅内部可直接访问）

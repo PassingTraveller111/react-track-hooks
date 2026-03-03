@@ -34,9 +34,17 @@ export interface TrackGlobalConfig {
         batchSize: number, // 队列容量上限
         batchInterval: number, // 触发上报间隔
     }
+    // 曝光埋点配置
     exposureConfig?: {
         exposureOnce?: boolean; // 暴露是否只触发一次
         exposureThreshold?: number; // 元素暴露多少部分（0-1）触发
+    }
+    // 页面停留配置
+    pageStayConfig?: {
+        timeout?: number; // 多少时间不操作，就暂停计时，并进行埋点上报
+        minDuration?: number; // 最短有效时间
+        maxDuration?: number; // 最长单次计时（防止数据异常）
+        checkInterval?: number; // 多长时间检查一次用户无操作时间
     }
 }
 

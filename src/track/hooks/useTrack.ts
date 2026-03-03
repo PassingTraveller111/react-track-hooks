@@ -16,6 +16,7 @@ export const useTrack = (params: TrackParams, config: TrackConfig = {}) => {
     latestConfigRef.current = config;
     trackRef.current = params;
 
+    // 触发时可以覆盖定义时的params
     const triggerTrack = useCallback((customParams = {}) => {
         // 合并默认配置（含全局配置）和单个 Hook 配置
         const mergedConfig = { ...getTrackGlobalConfig(), ...latestConfigRef.current };
