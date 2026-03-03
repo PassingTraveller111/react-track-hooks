@@ -1,5 +1,5 @@
 import {TrackConfig, TrackParams} from "../../types";
-import {useCallback, useEffect, useRef} from "react";
+import {useCallback, useRef} from "react";
 import {sendTrack} from "../core/sendTrack";
 import {getTrackGlobalConfig} from "../config";
 
@@ -10,22 +10,24 @@ import {getTrackGlobalConfig} from "../config";
  * @returns 包含触发埋点方法的对象
  */
 export const useTrack = (params: TrackParams, config: TrackConfig = {}) => {
-    // 合并默认配置（含全局配置）和单个 Hook 配置
-    const mergedConfig = { ...getTrackGlobalConfig(), ...config };
+    const latestConfigRef = useRef(config)
     const trackRef = useRef(params);
 
-    useEffect(() => {
-        trackRef.current = params;
-    }, [params]);
+    latestConfigRef.current = config;
+    trackRef.current = params;
 
     const triggerTrack = useCallback((customParams = {}) => {
+        // 合并默认配置（含全局配置）和单个 Hook 配置
+        const mergedConfig = { ...getTrackGlobalConfig(), ...latestConfigRef.current };
+
         const finalParams = {
             ...trackRef.current,
             ...customParams
         };
+
         // 把 mergedConfig 传给 sendTrack，支持覆盖 trackUrl
         sendTrack(finalParams, mergedConfig);
-    }, [mergedConfig]);
+    }, []);
 
     return { triggerTrack };
 };

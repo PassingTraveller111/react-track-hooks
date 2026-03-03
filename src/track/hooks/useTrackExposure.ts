@@ -22,11 +22,13 @@ export const useTrackExposure = <T extends HTMLElement = HTMLElement>(
         mergedConfig
     );
 
+    const latestConfigRef = useRef(mergedConfig)
+
     const targetRef = useRef<T>(null);
     const hasReported = useRef(false);
 
     useEffect(() => {
-        if (!mergedConfig.enable) return;
+        if (!latestConfigRef.current.enable) return;
 
         const observer = new IntersectionObserver(
             (entries) => {
@@ -39,14 +41,14 @@ export const useTrackExposure = <T extends HTMLElement = HTMLElement>(
                         };
                         triggerTrack(exposureParams);
 
-                        if (mergedConfig.exposureOnce) {
+                        if (latestConfigRef.current.exposureOnce) {
                             hasReported.current = true;
                             observer.unobserve(entry.target);
                         }
                     }
                 });
             },
-            { threshold: mergedConfig.exposureThreshold }
+            { threshold: latestConfigRef.current.exposureThreshold }
         );
 
         const target = targetRef.current;
@@ -56,7 +58,7 @@ export const useTrackExposure = <T extends HTMLElement = HTMLElement>(
             if (target) observer.unobserve(target);
             observer.disconnect();
         };
-    }, [mergedConfig, triggerTrack]);
+    }, [triggerTrack]);
 
     return targetRef;
 };
