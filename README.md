@@ -1,5 +1,3 @@
-下面是**你原本的完整 README 原样保留**，**只新增、补充、完善页面停留时长相关内容**，**没有删除、没有改写你原有任何文字**，可以直接覆盖使用：
-
 ```markdown
 # react-track-hooks
 
@@ -101,7 +99,6 @@ export const TrackProvider = () => {
          minDuration: 2 * 1000, // 最短有效时间
          maxDuration: 2 * 60 * 1000, // 最长活跃时间
          checkInterval: 1000, // 检查用户是否活跃计时器
-         reportOnHidden: true, // 页面隐藏就触发上报
       }
    });
 
@@ -283,7 +280,6 @@ function RetryButton() {
 | minDuration | number | 2000 | 最小有效时长（ms），低于该值不上报 |
 | maxDuration | number | 3600000 | 最大单页时长（ms），防止异常超长数据 |
 | checkInterval | number | 1000 | 定时检查用户活跃状态的间隔（ms） |
-| reportOnHidden | boolean | true | 页面切后台（隐藏）时是否立即上报本次时长 |
 
 ### Hooks
 #### useTrackRetryListener()
@@ -319,7 +315,7 @@ function RetryButton() {
 
 - 自动监听：页面显隐、用户操作（鼠标/键盘/滚动/触摸）、无操作超时、组件卸载、页面关闭
 - 只统计**真实有效活跃时长**，超时、切后台时不计入
-- 页面关闭/刷新时使用 `sendBeacon` 保证上报不丢失
+- 页面关闭/刷新时使用 `keepalive: true` 保证上报不丢失
 - 上报自动携带字段：`stayTime: 有效时长(ms)`
 
 #### useTrackFirstRender(eventName, baseParams?, config?)
@@ -392,11 +388,10 @@ export interface TrackGlobalConfig {
       exposureThreshold: number; // 元素暴露多少部分（0-1）触发
    }
    pageStayConfig?: {
-      timeout: number;        // 无操作超时时间，超时暂停计时
+      timeout: number;        // 无操作超时时间，超时暂停计时，并进行上报
       minDuration: number;    // 最小有效时长，低于该值不上报
       maxDuration: number;    // 最大单页时长，防止异常数据
       checkInterval: number;  // 活跃检查间隔
-      reportOnHidden: boolean;// 页面隐藏时是否立即上报
    };
 }
 ```
@@ -438,15 +433,17 @@ export interface TrackGlobalConfig {
 
 ### 页面停留时长逻辑
 1. **活跃检测**：监听鼠标、键盘、滚动、点击、touch 事件，实时标记用户活跃
-2. **无操作超时**：超过 `timeout` 无操作 → 暂停计时
-3. **页面可见性**：切后台暂停，切回前台恢复计时
-4. **有效时长规则**：
+2. **有效时长规则**：
    - 低于 `minDuration` 不上报
    - 高于 `maxDuration` 按上限截断
    - 只累计用户真正活跃的时间段
-5. **上报保障**：
-   - 页面隐藏可配置立即上报
-   - 组件卸载、页面关闭使用 `sendBeacon` 确保送达
+3. **三种触发上报时机**：
+   - **无操作超时**：超过 `timeout` 无操作 → 暂停计时并进行上报（走默认上报逻辑，根据你的配置，如果配置了批量上报，那么将走批量上报的逻辑）
+   - **组件卸载**： 组件卸载 → 暂停计时并进行上报（走默认上报逻辑）
+   - **页面可见性**：页面隐藏/关闭 → 绕过默认上报逻辑，直接单独进行上报
+4. **触发保障**：
+   - **用兼容性更强visibilitychange替代beforeunload**: visibilitychange的兼容性更强，beforeunload在safari浏览器不兼容
+   - **用keepalive：true替代sendBeacon**: 保证页面关闭的情况下也能触发失败缓存的回调
 
 ## 适配说明
 - React 版本：支持 React 16.8+（Hooks 最低兼容版本）
@@ -489,12 +486,12 @@ A: 批量重试为原子操作：
 ### Q6: 页面停留时长不准？
 A: 本 Hook 统计的是**有效活跃时长**：
 - 用户无操作超时 → 暂停计时
-- 页面切后台 → 暂停计时
-- 重新操作/切回页面 → 恢复计时
+- 页面切后台 → 进行上报
+- 重新操作 → 恢复计时
   并非从打开到关闭的自然时间。
 
 ### Q7: 页面关闭/刷新时停留时长会丢失吗？
-A: 不会。卸载/关闭场景会使用 `navigator.sendBeacon` 异步上报，最大限度保证埋点不丢失。
+A: 不会。当触发页面隐藏（hidden）时，Hook 会自动执行 stopTracking 计算最后一段有效时长，并立即调用 triggerSingleTrack。通过 fetch 的 keepalive: true 属性，浏览器会将该请求标记为“后台独立任务”，确保即便页面文档对象（Document）被销毁，请求依然能在后台成功发出。
 
 ### Q8: 如何控制多久无操作算“离开”？
 A: 配置 `pageStayConfig.timeout`，默认 30 分钟。

@@ -35,7 +35,6 @@ interface TrackGlobalConfig {
         minDuration?: number;
         maxDuration?: number;
         checkInterval?: number;
-        reportOnHidden?: boolean;
     };
 }
 interface TrackConfig extends Partial<TrackGlobalConfig> {

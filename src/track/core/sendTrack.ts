@@ -44,6 +44,7 @@ export const sendTrack = async (params: TrackParams, config: TrackConfig) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ...params,
+                keepalive: true,
                 timestamp: Date.now(),
                 userAgent: navigator.userAgent,
                 url: window.location.href,

@@ -34,7 +34,6 @@ const DEFAULT_TRACK_CONFIG = {
         minDuration: 2000, // 最小有效时长2秒（低于则丢弃）
         maxDuration: 60 * 60 * 1000, // 最大单次时长60分钟（防止异常数据）
         checkInterval: 1000, // 每秒检查一次活跃状态
-        reportOnHidden: true, // 页面切后台就立即上报，防止数据丢失
     }
 };
 // 私有全局配置（仅内部可直接访问）
@@ -338,6 +337,7 @@ const sendBatchTrack = async (tracks, config) => {
         // 发送批量请求
         const response = await fetch(finalBatchUrl, {
             method: 'POST',
+            keepalive: true,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tracks: tracksWithCommonParams }) // 批量上报格式：{ tracks: [...] }
         });
@@ -473,6 +473,7 @@ const sendTrack = async (params, config) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ...params,
+                keepalive: true,
                 timestamp: Date.now(),
                 userAgent: navigator.userAgent,
                 url: window.location.href,
@@ -602,46 +603,6 @@ const useTrackExposure = (eventName, customParams = {}, config = {}) => {
     return targetRef;
 };
 
-/**
- * 页面卸载时专用上报方法（使用 navigator.sendBeacon）
- * 不会进入批量队列，不会丢失，浏览器保证发送
- */
-const sendBeaconTrack = async (params, config = {}) => {
-    var _a;
-    // 服务端不执行
-    if (!isClient())
-        return;
-    if (!params.eventName) {
-        console.warn(" Beacon 埋点缺少必要参数：eventName");
-        return;
-    }
-    const GLOBAL_TRACK_CONFIG = getTrackGlobalConfig();
-    const finalTrackUrl = config.trackUrl || GLOBAL_TRACK_CONFIG.trackUrl;
-    const isEnable = (_a = config.enable) !== null && _a !== void 0 ? _a : GLOBAL_TRACK_CONFIG.enable;
-    if (!isEnable)
-        return;
-    try {
-        const data = JSON.stringify({
-            ...params,
-            timestamp: Date.now(),
-            userAgent: navigator.userAgent,
-            url: window.location.href,
-            referrer: document.referrer,
-        });
-        if (navigator.sendBeacon) {
-            // 发送 Blob 格式，兼容性最好，服务端解析最稳
-            const blob = new Blob([data], { type: "application/json" });
-            navigator.sendBeacon(finalTrackUrl, blob);
-        }
-        else {
-            // 浏览器不支持 sendBeacon，跳过上报
-        }
-    }
-    catch (err) {
-        console.error(" Beacon 埋点发送失败：", err);
-    }
-};
-
 // 默认配置（兜底值，全局配置可覆盖）
 const DEFAULT_PAGE_STAY_CONFIG = {
     timeout: 30 * 60 * 1000, // 30分钟无操作 → 暂停计时
@@ -657,7 +618,13 @@ const DEFAULT_PAGE_STAY_CONFIG = {
  */
 const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
     // 初始化埋点上报方法
+    // 默认的埋点上报
     const { triggerTrack } = useTrack({ eventName, type: TrackType.PAGE_STAY, ...customParams }, config);
+    // 单独埋点上报
+    const { triggerTrack: triggerSingleTrack } = useTrack({ eventName, type: TrackType.PAGE_STAY, ...customParams }, {
+        ...config,
+        enableBatch: false, // 关闭批量上报
+    });
     // ===================== 持久化状态（不受渲染/闭包影响） =====================
     // 当前计时片段的开始时间
     const startTimeRef = useRef(null);
@@ -714,28 +681,20 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
         };
         /**
          * 上报最终有效停留时长
-         * isUnload：是否页面卸载（卸载使用 sendBeacon）
+         * isHidden：是否是页面隐藏/关闭触发，在页面隐藏/关闭时不走批量队列，直接单独上报
          */
-        const reportValidStayTime = (isUnload = false) => {
+        const reportValidStayTime = (isHidden = false) => {
             // 先确保停止当前计时
             stopTracking();
             const { minDuration, maxDuration } = getLastPageStayConfig();
             // 限制最大时长，防止异常数据
             const finalStayTime = Math.min(totalValidDurationRef.current, maxDuration);
             if (finalStayTime >= minDuration) {
-                const trackParams = {
-                    eventName,
-                    type: TrackType.PAGE_STAY,
-                    stayTime: finalStayTime,
-                    ...customParams,
-                };
-                if (isUnload) {
-                    // 卸载场景：sendBeacon 保证送达
-                    sendBeaconTrack(trackParams, config);
+                if (isHidden) {
+                    triggerSingleTrack({ stayTime: finalStayTime }); // 页面隐藏/关闭，直接走单独上报
                 }
                 else {
-                    // 正常场景：进入批量队列
-                    triggerTrack({ stayTime: finalStayTime });
+                    triggerTrack({ stayTime: finalStayTime }); // 非页面隐藏/关闭，直接走正常上报逻辑（如果配置了批量上报，就走批量上报）
                 }
             }
             // 重置累计时长，避免重复上报
@@ -744,10 +703,9 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
         /**
          * 页面可见性变化监听
          * 显示 → 开始/恢复计时
-         * 隐藏 → 暂停计时
+         * 隐藏 → 暂停计时/并进行上报
          */
         const handleVisibilityChange = () => {
-            const { reportOnHidden } = getLastPageStayConfig();
             if (document.visibilityState === "visible") {
                 console.log('页面可见，重新开始计时');
                 // 页面可见：重新开始计时
@@ -758,10 +716,8 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
             else {
                 // 页面隐藏：立即暂停
                 stopTracking();
-                if (reportOnHidden) { // 页面隐藏时是否触发上报
-                    console.log('页面隐藏，触发上报');
-                    reportValidStayTime();
-                }
+                console.log('页面隐藏/关闭，触发上报');
+                reportValidStayTime(true); // 页面隐藏，走单独上报的逻辑
             }
         };
         /**
@@ -778,7 +734,7 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
             if (now - lastActiveRef.current >= timeout) {
                 console.log('用户不活跃，停止计时并进行上报');
                 stopTracking();
-                reportValidStayTime(); // 正常队列
+                reportValidStayTime(); // 用户不活跃上报，走正常逻辑
             }
         };
         // ===================== 绑定事件监听 =====================
@@ -796,20 +752,14 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
         // ===================== 启动活跃检查定时器 =====================
         const { checkInterval } = getLastPageStayConfig();
         timerRef.current = setInterval(checkActiveStatus, checkInterval);
-        // ===================== 页面关闭/刷新时上报（使用 Beacon） =====================
-        const handleBeforeUnload = () => {
-            reportValidStayTime(true);
-        };
-        window.addEventListener("beforeunload", handleBeforeUnload);
         // ===================== 清理副作用（组件卸载/页面离开） =====================
         return () => {
             clearInterval(timerRef.current);
             activeEvents.forEach(evt => window.removeEventListener(evt, markUserActive));
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-            reportValidStayTime(true); // 组件卸载进行上报
+            reportValidStayTime(); // 组件卸载进行上报，走默认逻辑
         };
-    }, [triggerTrack, eventName, customParams, config]);
+    }, [triggerTrack, triggerSingleTrack, eventName, customParams, config]);
 };
 
 // 单例锁（全局变量）

@@ -25,7 +25,6 @@ const DEFAULT_TRACK_CONFIG: TrackGlobalConfig = {
         minDuration: 2000,       // 最小有效时长2秒（低于则丢弃）
         maxDuration: 60 * 60 * 1000, // 最大单次时长60分钟（防止异常数据）
         checkInterval: 1000,     // 每秒检查一次活跃状态
-        reportOnHidden: true, // 页面切后台就立即上报，防止数据丢失
     }
 };
 

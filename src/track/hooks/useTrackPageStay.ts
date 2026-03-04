@@ -2,7 +2,6 @@ import { TrackConfig, TrackType } from "../../types";
 import { useTrack } from "./useTrack";
 import { useEffect, useRef } from "react";
 import { getTrackGlobalConfig } from "../config";
-import { sendBeaconTrack } from "../core/sendBeaconTrack";
 
 // 默认配置（兜底值，全局配置可覆盖）
 const DEFAULT_PAGE_STAY_CONFIG = {
@@ -24,9 +23,18 @@ export const useTrackPageStay = (
     config: TrackConfig = {}
 ) => {
     // 初始化埋点上报方法
+    // 默认的埋点上报
     const { triggerTrack } = useTrack(
         { eventName, type: TrackType.PAGE_STAY, ...customParams },
         config
+    );
+    // 单独埋点上报
+    const { triggerTrack: triggerSingleTrack } = useTrack(
+        { eventName, type: TrackType.PAGE_STAY, ...customParams },
+        {
+            ...config,
+            enableBatch: false, // 关闭批量上报
+        }
     );
 
     // ===================== 持久化状态（不受渲染/闭包影响） =====================
@@ -90,9 +98,9 @@ export const useTrackPageStay = (
 
         /**
          * 上报最终有效停留时长
-         * isUnload：是否页面卸载（卸载使用 sendBeacon）
+         * isHidden：是否是页面隐藏/关闭触发，在页面隐藏/关闭时不走批量队列，直接单独上报
          */
-        const reportValidStayTime = (isUnload = false) => {
+        const reportValidStayTime = (isHidden = false) => {
             // 先确保停止当前计时
             stopTracking();
 
@@ -101,19 +109,10 @@ export const useTrackPageStay = (
             const finalStayTime = Math.min(totalValidDurationRef.current, maxDuration);
 
             if (finalStayTime >= minDuration) {
-                const trackParams = {
-                    eventName,
-                    type: TrackType.PAGE_STAY,
-                    stayTime: finalStayTime,
-                    ...customParams,
-                };
-
-                if (isUnload) {
-                    // 卸载场景：sendBeacon 保证送达
-                    sendBeaconTrack(trackParams, config);
-                } else {
-                    // 正常场景：进入批量队列
-                    triggerTrack({ stayTime: finalStayTime });
+                if(isHidden){
+                    triggerSingleTrack({ stayTime: finalStayTime }) // 页面隐藏/关闭，直接走单独上报
+                }else{
+                    triggerTrack({ stayTime: finalStayTime }); // 非页面隐藏/关闭，直接走正常上报逻辑（如果配置了批量上报，就走批量上报）
                 }
             }
 
@@ -124,10 +123,9 @@ export const useTrackPageStay = (
         /**
          * 页面可见性变化监听
          * 显示 → 开始/恢复计时
-         * 隐藏 → 暂停计时
+         * 隐藏 → 暂停计时/并进行上报
          */
         const handleVisibilityChange = () => {
-            const { reportOnHidden } = getLastPageStayConfig();
             if (document.visibilityState === "visible") {
                 console.log('页面可见，重新开始计时')
                 // 页面可见：重新开始计时
@@ -137,10 +135,8 @@ export const useTrackPageStay = (
             } else {
                 // 页面隐藏：立即暂停
                 stopTracking();
-                if (reportOnHidden) { // 页面隐藏时是否触发上报
-                    console.log('页面隐藏，触发上报')
-                    reportValidStayTime();
-                }
+                console.log('页面隐藏/关闭，触发上报')
+                reportValidStayTime(true); // 页面隐藏，走单独上报的逻辑
             }
         };
 
@@ -158,7 +154,7 @@ export const useTrackPageStay = (
             if (now - lastActiveRef.current >= timeout) {
                 console.log('用户不活跃，停止计时并进行上报')
                 stopTracking();
-                reportValidStayTime(); // 正常队列
+                reportValidStayTime(); // 用户不活跃上报，走正常逻辑
             }
         };
 
@@ -181,21 +177,14 @@ export const useTrackPageStay = (
         const { checkInterval } = getLastPageStayConfig();
         timerRef.current = setInterval(checkActiveStatus, checkInterval);
 
-        // ===================== 页面关闭/刷新时上报（使用 Beacon） =====================
-        const handleBeforeUnload = () => {
-            reportValidStayTime(true);
-        };
-        window.addEventListener("beforeunload", handleBeforeUnload);
-
         // ===================== 清理副作用（组件卸载/页面离开） =====================
         return () => {
             clearInterval(timerRef.current!);
             activeEvents.forEach(evt => window.removeEventListener(evt, markUserActive));
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("beforeunload", handleBeforeUnload);
 
-            reportValidStayTime(true); // 组件卸载进行上报
+            reportValidStayTime(); // 组件卸载进行上报，走默认逻辑
         };
 
-    }, [triggerTrack, eventName, customParams, config]);
+    }, [triggerTrack, triggerSingleTrack, eventName, customParams, config]);
 };

@@ -40,6 +40,7 @@ const sendBatchTrack = async (tracks: TrackParams[], config: TrackConfig) => {
         // 发送批量请求
         const response = await fetch(finalBatchUrl, {
             method: 'POST',
+            keepalive: true,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tracks: tracksWithCommonParams }) // 批量上报格式：{ tracks: [...] }
         });

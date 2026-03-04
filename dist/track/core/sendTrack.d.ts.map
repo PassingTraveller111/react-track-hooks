@@ -1,1 +1,1 @@
-{"version":3,"file":"sendTrack.d.ts","sourceRoot":"","sources":["../../../src/track/core/sendTrack.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,WAAW,EAAE,WAAW,EAAC,MAAM,aAAa,CAAC;AAMrD;;;;GAIG;AACH,eAAO,MAAM,SAAS,GAAU,QAAQ,WAAW,EAAE,QAAQ,WAAW,kBAiEvE,CAAC"}
+{"version":3,"file":"sendTrack.d.ts","sourceRoot":"","sources":["../../../src/track/core/sendTrack.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,WAAW,EAAE,WAAW,EAAC,MAAM,aAAa,CAAC;AAMrD;;;;GAIG;AACH,eAAO,MAAM,SAAS,GAAU,QAAQ,WAAW,EAAE,QAAQ,WAAW,kBAkEvE,CAAC"}
