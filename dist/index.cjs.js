@@ -237,6 +237,7 @@ const retryFailedTracks = async (force = false) => {
             }));
             try {
                 const response = await fetch(batchTrackUrl, {
+                    keepalive: true,
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(batchRetryTracks)
@@ -245,7 +246,7 @@ const retryFailedTracks = async (force = false) => {
                 if (!response.ok) {
                     throw new Error(`批量接口返回异常：${response.status} ${response.statusText}`);
                 }
-                console.log('批量埋点重试成功：', batchRetryTracks.length, '条');
+                console.log('批量埋点重试成功：', batchRetryTracks.length, '条', batchRetryTracks);
                 // 过滤掉重试成功的埋点
                 failedTracks = failedTracks.filter(track => !retryableTracks.some(item => item.id === track.id));
             }
@@ -266,6 +267,7 @@ const retryFailedTracks = async (force = false) => {
                 try {
                     const response = await fetch(trackUrl, {
                         method: 'POST',
+                        keepalive: true,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             ...track,
@@ -436,6 +438,58 @@ const initBatchTimer = (config) => {
         processBatchQueue(config);
     }, (batchConfig === null || batchConfig === void 0 ? void 0 : batchConfig.batchInterval) || 5000);
 };
+// 是否进行过页面初始化监听
+let isListenerInitialized = false;
+// 定义一个持久的引用，以便移除监听
+let visibilityHandler = null;
+/**
+* 初始化页面卸载监听
+* */
+const initPageUnloadListener = (config) => {
+    if (isListenerInitialized)
+        return;
+    // 将 handler 赋值给外部变量
+    visibilityHandler = () => {
+        if (document.visibilityState === 'hidden') {
+            console.log('页面关闭/隐藏，进行批量上报');
+            processBatchQueue(config);
+        }
+    };
+    document.addEventListener('visibilitychange', visibilityHandler);
+    isListenerInitialized = true;
+};
+// 确保只初始化一次
+let isInitialized = false;
+/**
+* 初始化批量上报埋点器
+* */
+const InitBatchTracker = (config) => {
+    if (isInitialized)
+        return; // 确保只初始化一次
+    // 1. 启动批量上报的定时任务
+    initBatchTimer(config);
+    // 2. 挂载页面生命周期监听
+    initPageUnloadListener(config);
+    isInitialized = true;
+};
+/**
+ * 销毁批量上报埋点器
+ * */
+const DestroyBatchTracker = () => {
+    // 1. 清理定时器
+    if (BATCH_TIMER) {
+        clearTimeout(BATCH_TIMER);
+        BATCH_TIMER = null;
+    }
+    // 2. 移除事件监听器
+    if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+        visibilityHandler = null;
+    }
+    // 3. 重置初始化状态，允许再次 Init
+    isInitialized = false;
+    isListenerInitialized = false;
+};
 
 /**
  * 通用埋点发送函数（支持单个 Hook 覆盖 trackUrl）
@@ -473,9 +527,9 @@ const sendTrack = async (params, config) => {
         const response = await fetch(finalTrackUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
             body: JSON.stringify({
                 ...params,
-                keepalive: true,
                 timestamp: Date.now(),
                 userAgent: navigator.userAgent,
                 url: window.location.href,
@@ -632,8 +686,6 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
     const startTimeRef = react.useRef(null);
     // 用户最后一次活跃时间
     const lastActiveRef = react.useRef(Date.now());
-    // 累计有效停留总时长
-    const totalValidDurationRef = react.useRef(0);
     // 定时检查器引用
     const timerRef = react.useRef(null);
     // 是否正在计时中
@@ -655,52 +707,41 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
          * 作用：刷新最后活跃时间；若已暂停则恢复计时
          */
         const markUserActive = () => {
+            // 用户活跃更新最后活跃时间
             lastActiveRef.current = Date.now();
             // 若当前未计时 + 页面可见 → 重新开始计时
             if (!isTrackingRef.current && document.visibilityState === "visible") {
+                console.log('用户重新活跃，重新开始计时');
                 startTimeRef.current = Date.now();
                 isTrackingRef.current = true;
             }
-        };
-        /**
-         * 停止当前计时片段
-         * 作用：计算本次片段时长 → 累加到总有效时长 → 重置计时状态
-         */
-        const stopTracking = () => {
-            // 未开始计时则直接返回
-            if (!startTimeRef.current || !isTrackingRef.current)
-                return;
-            const now = Date.now();
-            const currentSegmentDuration = now - startTimeRef.current;
-            const { timeout } = getLastPageStayConfig();
-            // 只有在【超时时间内有操作】的片段才计入有效时长
-            if (now - lastActiveRef.current < timeout && currentSegmentDuration > 0) {
-                totalValidDurationRef.current += currentSegmentDuration;
-            }
-            // 重置当前计时状态
-            startTimeRef.current = null;
-            isTrackingRef.current = false;
         };
         /**
          * 上报最终有效停留时长
          * isHidden：是否是页面隐藏/关闭触发，在页面隐藏/关闭时不走批量队列，直接单独上报
          */
         const reportValidStayTime = (isHidden = false) => {
-            // 先确保停止当前计时
-            stopTracking();
+            if (startTimeRef.current === null)
+                return;
             const { minDuration, maxDuration } = getLastPageStayConfig();
+            // 上次活跃时间 - 本次计时开始时间 => 用户实际活跃时间
+            const operateTime = lastActiveRef.current - startTimeRef.current;
             // 限制最大时长，防止异常数据
-            const finalStayTime = Math.min(totalValidDurationRef.current, maxDuration);
+            const finalStayTime = Math.min(operateTime, maxDuration);
             if (finalStayTime >= minDuration) {
                 if (isHidden) {
                     triggerSingleTrack({ stayTime: finalStayTime }); // 页面隐藏/关闭，直接走单独上报
                 }
                 else {
-                    triggerTrack({ stayTime: finalStayTime }); // 非页面隐藏/关闭，直接走正常上报逻辑（如果配置了批量上报，就走批量上报）
+                    console.log('组件卸载/用户不活跃触发默认上报逻辑');
+                    triggerTrack({ stayTime: finalStayTime }); // 组件卸载/用户不活跃，直接走正常上报逻辑（如果配置了批量上报，就走批量上报）
                 }
             }
-            // 重置累计时长，避免重复上报
-            totalValidDurationRef.current = 0;
+            else { // 过滤无效时长
+                console.log('页面停留时长小于minDuration，无效的上报数据');
+            }
+            // 停止计时，下次活跃/切换进页面重新开始计时
+            isTrackingRef.current = false;
         };
         /**
          * 页面可见性变化监听
@@ -717,8 +758,7 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
             }
             else {
                 // 页面隐藏：立即暂停
-                stopTracking();
-                console.log('页面隐藏/关闭，触发上报');
+                console.log('页面隐藏/关闭，停止计时，触发上报');
                 reportValidStayTime(true); // 页面隐藏，走单独上报的逻辑
             }
         };
@@ -734,8 +774,6 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
             const { timeout } = getLastPageStayConfig();
             // 超过超时时间未操作 → 停止并上报
             if (now - lastActiveRef.current >= timeout) {
-                console.log('用户不活跃，停止计时并进行上报');
-                stopTracking();
                 reportValidStayTime(); // 用户不活跃上报，走正常逻辑
             }
         };
@@ -761,7 +799,7 @@ const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             reportValidStayTime(); // 组件卸载进行上报，走默认逻辑
         };
-    }, [triggerTrack, triggerSingleTrack, eventName, customParams, config]);
+    }, [triggerTrack, triggerSingleTrack, config]);
 };
 
 // 单例锁（全局变量）
@@ -863,6 +901,32 @@ const useTrackFirstRender = (eventName, customParams = {}, config = {}) => {
     }, []);
 };
 
+/**
+ * 埋点初始化 Hook
+ * @param config 全局埋点配置
+ */
+const useTrackInit = (config) => {
+    const isInitialized = react.useRef(false);
+    react.useEffect(() => {
+        if (isInitialized.current)
+            return;
+        if (!config.enableBatch)
+            return; // 开启批量上报
+        // 1. 设置配置
+        setTrackGlobalConfig(config);
+        // 2. 初始化批量上报调度系统（包含定时器和生命周期监听）
+        InitBatchTracker(config);
+        isInitialized.current = true;
+        // console.log("埋点系统初始化完成");
+        return () => {
+            // 3. 清理批量埋点上报系统
+            DestroyBatchTracker();
+        };
+    }, [config]);
+    // 4. 启用失败重试监听（内部已做单例防重复处理）
+    useTrackRetryListener();
+};
+
 exports.getFailedTracks = getFailedTracks;
 exports.getTrackGlobalConfig = getTrackGlobalConfig;
 exports.retryFailedTracks = retryFailedTracks;
@@ -873,6 +937,7 @@ exports.useTrackClick = useTrackClick;
 exports.useTrackCustom = useTrackCustom;
 exports.useTrackExposure = useTrackExposure;
 exports.useTrackFirstRender = useTrackFirstRender;
+exports.useTrackInit = useTrackInit;
 exports.useTrackPageStay = useTrackPageStay;
 exports.useTrackRetryListener = useTrackRetryListener;
 //# sourceMappingURL=index.cjs.js.map

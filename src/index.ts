@@ -13,4 +13,5 @@ export { useTrackCustom } from './track/hooks/useTrackCustom';
 export { useTrackExposure } from './track/hooks/useTrackExposure';
 export { useTrackPageStay } from './track/hooks/useTrackPageStay';
 export { useTrackRetryListener } from './track/listeners/useTrackRetryListener';
-export { useTrackFirstRender } from './track/hooks/useTrackFirstRender'
+export { useTrackFirstRender } from './track/hooks/useTrackFirstRender';
+export { useTrackInit } from './track/hooks/useTrackInit';

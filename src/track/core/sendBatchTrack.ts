@@ -144,3 +144,62 @@ export const initBatchTimer = (config: TrackConfig) => {
     }, batchConfig?.batchInterval || 5000);
 };
 
+// 是否进行过页面初始化监听
+let isListenerInitialized = false;
+// 定义一个持久的引用，以便移除监听
+let visibilityHandler: (() => void) | null = null;
+/**
+* 初始化页面卸载监听
+* */
+export const initPageUnloadListener = (config: TrackConfig) => {
+    if (isListenerInitialized) return;
+
+    // 将 handler 赋值给外部变量
+    visibilityHandler = () => {
+        if (document.visibilityState === 'hidden') {
+            console.log('页面关闭/隐藏，进行批量上报')
+            processBatchQueue(config);
+        }
+    };
+
+    document.addEventListener('visibilitychange', visibilityHandler);
+    isListenerInitialized = true;
+};
+
+
+// 确保只初始化一次
+let isInitialized = false;
+/**
+* 初始化批量上报埋点器
+* */
+export const InitBatchTracker = (config: TrackConfig) => {
+    if (isInitialized) return; // 确保只初始化一次
+
+    // 1. 启动批量上报的定时任务
+    initBatchTimer(config);
+
+    // 2. 挂载页面生命周期监听
+    initPageUnloadListener(config);
+
+    isInitialized = true;
+}
+/**
+ * 销毁批量上报埋点器
+ * */
+export const DestroyBatchTracker = () => {
+    // 1. 清理定时器
+    if (BATCH_TIMER) {
+        clearTimeout(BATCH_TIMER);
+        BATCH_TIMER = null;
+    }
+
+    // 2. 移除事件监听器
+    if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+        visibilityHandler = null;
+    }
+
+    // 3. 重置初始化状态，允许再次 Init
+    isInitialized = false;
+    isListenerInitialized = false;
+}

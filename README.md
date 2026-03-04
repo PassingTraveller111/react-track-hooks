@@ -1,4 +1,3 @@
-```markdown
 # react-track-hooks
 
 [![npm version](https://img.shields.io/npm/v/react-track-hooks.svg)](https://www.npmjs.com/package/react-track-hooks)
@@ -34,41 +33,48 @@ pnpm add react-track-hooks
 在 React/Next.js 项目的入口文件（如 `App.tsx`/`layout.tsx`）中配置全局参数：
 
 #### React 项目
+
 ```tsx
-import { setTrackGlobalConfig, useTrackRetryListener } from 'react-track-hooks';
+import { useEffect } from "react";
+import {setTrackGlobalConfig, useTrackRetryListener, InitBatchTracker, DestroyBatchTracker} from 'react-track-hooks';
 
 function App() {
-    // 全局埋点配置（只执行一次）
-    setTrackGlobalConfig({
-       trackUrl: '/api/track',
-       batchTrackUrl: '/api/track/batch',
-       enable: true,
-       enableBatch: true,
-       retryConfig: {
-          maxRetryTimes: 3,
-          initialDelay: 1000,
-          delayMultiplier: 2
-       },
-       batchConfig: {
-          batchSize: 10,
-          batchInterval: 5000,
-       },
-       exposureConfig: {
-          exposureOnce: true,
-          exposureThreshold: 0.5,
-       },
-       pageStayConfig: {
-          timeout: 30 * 1000, // 用户不活跃时间
-          minDuration: 2 * 1000, // 最短有效时间
-          maxDuration: 2 * 60 * 1000, // 最长活跃时间
-          checkInterval: 1000, // 检查用户是否活跃计时器
-       }
-    });
-
-    // 启用失败埋点自动重试监听（全局只执行一次）
-    useTrackRetryListener();
-
-    return <>{/* 你的应用内容 */}</>;
+   useEffect(() => {
+      // 全局埋点配置（只执行一次）
+      setTrackGlobalConfig({
+         trackUrl: '/api/track',
+         batchTrackUrl: '/api/track/batch',
+         enable: true,
+         enableBatch: true,
+         retryConfig: {
+            maxRetryTimes: 3,
+            initialDelay: 1000,
+            delayMultiplier: 2
+         },
+         batchConfig: {
+            batchSize: 10,
+            batchInterval: 5000,
+         },
+         exposureConfig: {
+            exposureOnce: true,
+            exposureThreshold: 0.5,
+         },
+         pageStayConfig: {
+            timeout: 30 * 1000, // 用户不活跃时间
+            minDuration: 2 * 1000, // 最短有效时间
+            maxDuration: 2 * 60 * 1000, // 最长活跃时间
+            checkInterval: 1000, // 检查用户是否活跃计时器
+         }
+      });
+      // 启用批量上报定时器以及页面卸载/关闭监听
+      InitBatchTracker(config);
+      // 启用失败埋点自动重试监听（全局只执行一次）
+      useTrackRetryListener();
+      return () => {
+         DestroyBatchTracker()
+      }
+   }, []);
+   return <>{/* 你的应用内容 */}</>;
 }
 ```
 
@@ -76,32 +82,45 @@ function App() {
 ```tsx
 // app/components/TrackProvider.tsx (客户端组件)
 'use client';
-import { setTrackGlobalConfig, useTrackRetryListener } from 'react-track-hooks';
+import { useEffect } from "react";
+import { setTrackGlobalConfig, useTrackRetryListener, InitBatchTracker, DestroyBatchTracker } from 'react-track-hooks';
 
 export const TrackProvider = () => {
-   setTrackGlobalConfig({
-      trackUrl: '/api/track',
-      batchTrackUrl: '/api/track/batch',
-      enable: true,
-      enableBatch: true,
-      retryConfig: {
-         maxRetryTimes: 3,
-         initialDelay: 1000,
-         delayMultiplier: 2
-      },
-      batchConfig: {
-         batchSize: 5, // 队列满5条触发批量上报
-         batchInterval: 5000, // 3秒触发一次批量上报
-      },
-      pageStayConfig: {
-         timeout: 30 * 1000, // 用户不活跃时间
-         minDuration: 2 * 1000, // 最短有效时间
-         maxDuration: 2 * 60 * 1000, // 最长活跃时间
-         checkInterval: 1000, // 检查用户是否活跃计时器
+   useEffect(() => {
+      // 全局埋点配置（只执行一次）
+      setTrackGlobalConfig({
+         trackUrl: '/api/track',
+         batchTrackUrl: '/api/track/batch',
+         enable: true,
+         enableBatch: true,
+         retryConfig: {
+            maxRetryTimes: 3,
+            initialDelay: 1000,
+            delayMultiplier: 2
+         },
+         batchConfig: {
+            batchSize: 10,
+            batchInterval: 5000,
+         },
+         exposureConfig: {
+            exposureOnce: true,
+            exposureThreshold: 0.5,
+         },
+         pageStayConfig: {
+            timeout: 30 * 1000, // 用户不活跃时间
+            minDuration: 2 * 1000, // 最短有效时间
+            maxDuration: 2 * 60 * 1000, // 最长活跃时间
+            checkInterval: 1000, // 检查用户是否活跃计时器
+         }
+      });
+      // 启用批量上报定时器以及页面卸载/关闭监听
+      InitBatchTracker(config);
+      // 启用失败埋点自动重试监听（全局只执行一次）
+      useTrackRetryListener();
+      return () => {
+         DestroyBatchTracker()
       }
-   });
-
-    useTrackRetryListener();
+   }, []);
     return null;
 };
 
@@ -118,6 +137,40 @@ export default function RootLayout({ children }) {
         </html>
     );
 }
+```
+
+#### 简化初始化
+```tsx
+// React 项目/Next.js 客户端组件
+'use client';
+import { useTrackInit } from 'react-track-hooks';
+
+export const TrackProvider = () => {
+  // 一键初始化：包含全局配置设置 + 批量上报初始化 + 失败重试监听
+  useTrackInit({
+    trackUrl: '/api/track',
+    batchTrackUrl: '/api/track/batch',
+    enable: true,
+    enableBatch: true,
+    retryConfig: {
+      maxRetryTimes: 3,
+      initialDelay: 1000,
+      delayMultiplier: 2
+    },
+    batchConfig: {
+      batchSize: 10,
+      batchInterval: 5000
+    },
+    pageStayConfig: {
+      timeout: 30 * 1000,
+      minDuration: 2 * 1000,
+      maxDuration: 2 * 60 * 1000,
+      checkInterval: 1000
+    }
+  });
+
+  return null;
+};
 ```
 
 ### 2. 业务组件中使用埋点 Hooks
@@ -158,7 +211,6 @@ function CardComponent() {
         {
             exposureThreshold: 0.8, // 元素可见比例≥80%时触发
             exposureOnce: true, // 仅触发一次曝光
-            enableBatch: true // 启用批量上报
         }
     );
 
@@ -179,7 +231,6 @@ function HomePage() {
     useTrackPageStay(
         'page_stay', // 埋点事件名
         { page_path: '/home', platform: 'web' }, // 基础参数
-        { enableBatch: true } // 启用批量上报
     );
 
     return <div>首页内容</div>;
@@ -211,7 +262,6 @@ function FormComponent() {
     const triggerCustomTrack = useTrackCustom(
         'form_submit', // 埋点事件名
         { form_id: 'login_form' }, // 基础参数
-        { enableBatch: true } // 启用批量上报
     );
 
     const handleSubmit = () => {
@@ -281,10 +331,22 @@ function RetryButton() {
 | checkInterval | number | 1000 | 定时检查用户活跃状态的间隔（ms） |
 
 ### Hooks
+#### useTrackInit(config: TrackGlobalConfig)
+- 作用：一站式初始化埋点系统，整合 `setTrackGlobalConfig` + 批量上报初始化 + `useTrackRetryListener`，简化全局配置流程
+- 特性：
+   1. 内置单例校验，确保只初始化一次
+   2. 自动根据 `enableBatch` 初始化/销毁批量上报调度器
+   3. 内部自动调用 `useTrackRetryListener` 启用失败重试监听
+- 适用场景：替代手动调用 `setTrackGlobalConfig` + `useTrackRetryListener`，简化入口配置代码
+  | 参数 | 类型 | 必填 | 说明 |
+  |------|------|------|------|
+  | config | TrackGlobalConfig | 是 | 全局埋点配置（同 `setTrackGlobalConfig` 参数） |
+  | 返回值 | void | - | 无返回值 |
+
 #### useTrackRetryListener()
 - 作用：全局监听页面状态（初始化/切回标签页/浏览器空闲），自动触发失败埋点重试
 - 特性：内置防并发机制，避免重复执行重试流程
-- 注意：全局只需调用一次，建议放在项目入口
+- 注意：全局只需调用一次，建议放在项目入口；使用 `useTrackInit` 时无需手动调用
 
 #### useTrackClick(eventName, baseParams?, config?)
 | 参数 | 类型 | 必填 | 说明 |
@@ -313,8 +375,14 @@ function RetryButton() {
 | config | TrackConfig | 否 | 单个埋点配置（可覆盖全局批量/重试配置） |
 
 - 自动监听：页面显隐、用户操作（鼠标/键盘/滚动/触摸）、无操作超时、组件卸载、页面关闭
-- 只统计**真实有效活跃时长**，超时、切后台时不计入
-- 页面关闭/刷新时使用 `keepalive: true` 保证上报不丢失
+- 核心逻辑：
+   1. 仅统计用户**真实活跃时段**（无操作超时/切后台时暂停计时）
+   2. 用户重新活跃时自动恢复计时，累计有效时长
+   3. 有效时长 = 最后活跃时间 - 计时开始时间（自动截断最大时长，过滤最小时长）
+- 上报时机：
+   1. 无操作超时 → 暂停计时并走默认上报逻辑（支持批量）
+   2. 组件卸载 → 暂停计时并走默认上报逻辑（支持批量）
+   3. 页面隐藏/关闭 → 暂停计时并绕过批量队列，直接单独上报（保证数据不丢失）
 - 上报自动携带字段：`stayTime: 有效时长(ms)`
 
 #### useTrackFirstRender(eventName, baseParams?, config?)
@@ -403,6 +471,14 @@ export interface TrackGlobalConfig {
    - 距离上次上报超过 `batchInterval`（默认 5000ms）
 3. **异常处理**：批量上报失败时，所有埋点会自动转入失败队列，参与重试逻辑
 4. **优先级**：单个埋点配置的 `enableBatch` 优先级高于全局配置
+5. **警告**：全局配置`enableBatch`为`true`可以通过单个埋点的配置进行关闭。但是全局不开启`enableBatch`并进行初始化，通过单个埋点配置开启的批量上报将无效。
+
+### 页面关闭/隐藏批量上报保障机制
+1. **可靠监听**：基于 `visibilitychange` 监听页面关闭、标签隐藏、浏览器最小化等场景，兼容性覆盖所有现代浏览器及移动端，优于不可靠的 `beforeunload`。
+2. **紧急批量上报**：页面隐藏时立即触发**全量批量上报**，绕过定时等待，确保队列内埋点不丢失。
+3. **请求强保障**：上报请求携带 `keepalive: true`，浏览器会保证请求在页面卸载后仍可在后台完成发送。
+4. **失败兜底重试**：页面关闭时的批量上报若因网络异常失败，埋点会自动存入 `localStorage` 失败队列，遵循**增强型失败重试机制**，在页面重新打开、切回前台时自动重试，确保埋点数据100%不丢失。
+5. **无重复上报**：上报前同步清空队列，页面重新激活后自动重启定时任务，常规批量流程与关闭上报逻辑互不冲突。
 
 ### 增强型失败重试机制
 #### 核心流程
@@ -431,18 +507,26 @@ export interface TrackGlobalConfig {
 - 所有异常被统一捕获，确保 `isRetryRunning` 能正常重置
 
 ### 页面停留时长逻辑
-1. **活跃检测**：监听鼠标、键盘、滚动、点击、touch 事件，实时标记用户活跃
-2. **有效时长规则**：
-   - 低于 `minDuration` 不上报
-   - 高于 `maxDuration` 按上限截断
-   - 只累计用户真正活跃的时间段
-3. **三种触发上报时机**：
-   - **无操作超时**：超过 `timeout` 无操作 → 暂停计时并进行上报（走默认上报逻辑，根据你的配置，如果配置了批量上报，那么将走批量上报的逻辑）
-   - **组件卸载**： 组件卸载 → 暂停计时并进行上报（走默认上报逻辑）
-   - **页面可见性**：页面隐藏/关闭 → 绕过默认上报逻辑，直接单独进行上报
+1. **活跃检测**：监听鼠标、键盘、滚动、点击、touch 事件，实时标记用户活跃状态，更新最后活跃时间
+2. **计时规则**：
+   - 页面可见时自动开始计时，切后台/隐藏时暂停并上报
+   - 用户无操作超时（`timeout`）暂停计时，并进行上报。重新操作时恢复计时
+   - 有效时长 = 最后活跃时间 - 计时开始时间（仅统计真实活跃时段）
+   - 自动过滤 < `minDuration` 的无效时长，截断 > `maxDuration` 的异常时长
+3. **上报时机与策略**：
+   - **无操作超时/组件卸载**：走默认上报逻辑（支持批量），保证常规场景下的性能
+   - **页面隐藏/关闭**：使用 `enableBatch: false` 强制单条上报 + `keepalive: true`，绕过批量队列确保数据不丢失
 4. **触发保障**：
    - **用兼容性更强visibilitychange替代beforeunload**: visibilitychange的兼容性更强，beforeunload在safari浏览器不兼容
    - **用keepalive：true替代sendBeacon**: 保证页面关闭的情况下也能触发失败缓存的回调
+
+### 初始化简化逻辑（useTrackInit）
+1. 内置单例校验，避免重复初始化
+2. 自动执行：
+   - `setTrackGlobalConfig` 配置全局参数
+   - `InitBatchTracker` 初始化批量上报调度器（仅当 `enableBatch: true` 时）
+   - `useTrackRetryListener` 启用失败重试监听
+3. 组件卸载时自动执行 `DestroyBatchTracker` 清理批量上报定时器
 
 ## 适配说明
 - React 版本：支持 React 16.8+（Hooks 最低兼容版本）
@@ -472,7 +556,7 @@ A: 检查：
 
 ### Q4: 埋点上报失败不重试？
 A: 确保：
-1. 已调用 `useTrackRetryListener()`；
+1. 已调用 `useTrackRetryListener()`（使用 `useTrackInit` 则自动调用）；
 2. 重试次数未超过 `maxRetryTimes`；
 3. localStorage 未被禁用（失败埋点依赖 localStorage 存储）；
 4. 重试时间未到（可通过 `retryFailedTracks(true)` 强制重试验证）。
@@ -490,10 +574,19 @@ A: 本 Hook 统计的是**有效活跃时长**：
   并非从打开到关闭的自然时间。
 
 ### Q7: 页面关闭/刷新时停留时长会丢失吗？
-A: 不会。当触发页面隐藏（hidden）时，Hook 会自动执行 stopTracking 计算最后一段有效时长，并立即调用 triggerSingleTrack。通过 fetch 的 keepalive: true 属性，浏览器会将该请求标记为“后台独立任务”，确保即便页面文档对象（Document）被销毁，请求依然能在后台成功发出。
+A: 不会。当触发页面隐藏（hidden）时，Hook 会自动计算最后一段有效时长，并立即调用 triggerSingleTrack。通过 fetch 的 keepalive: true 属性，浏览器会将该请求标记为“后台独立任务”，确保即便页面文档对象（Document）被销毁，请求依然能在后台成功发出。
 
 ### Q8: 如何控制多久无操作算“离开”？
 A: 配置 `pageStayConfig.timeout`，默认 30 分钟。
+
+### Q9: useTrackInit 和手动配置的区别？
+A:
+1. `useTrackInit` 是对 `setTrackGlobalConfig` + `InitBatchTracker` + `useTrackRetryListener` 的封装，简化初始化代码；
+2. 手动配置需分别调用多个方法，`useTrackInit` 一键完成；
+3. `useTrackInit` 内置单例校验和自动清理逻辑，避免重复初始化/内存泄漏。
+
+### Q10: 页面直接关闭/刷新，批量埋点会丢失吗？
+A: 不会。页面关闭/隐藏时会**立即强制执行批量上报**，请求自带 `keepalive: true` 确保浏览器后台发送；若上报失败，数据会自动存入失败队列，下次页面打开时自动重试，完全避免数据丢失。
 
 ## 许可证
 MIT © [liujingmin](https://github.com/PassingTraveller111)

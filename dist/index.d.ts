@@ -139,5 +139,11 @@ declare const useTrackRetryListener: () => void;
  */
 declare const useTrackFirstRender: (eventName: string, customParams?: Record<string, any>, config?: TrackConfig) => void;
 
-export { TrackType, getFailedTracks, getTrackGlobalConfig, retryFailedTracks, saveFailedTracks, setTrackGlobalConfig, useTrack, useTrackClick, useTrackCustom, useTrackExposure, useTrackFirstRender, useTrackPageStay, useTrackRetryListener };
+/**
+ * 埋点初始化 Hook
+ * @param config 全局埋点配置
+ */
+declare const useTrackInit: (config: TrackGlobalConfig) => void;
+
+export { TrackType, getFailedTracks, getTrackGlobalConfig, retryFailedTracks, saveFailedTracks, setTrackGlobalConfig, useTrack, useTrackClick, useTrackCustom, useTrackExposure, useTrackFirstRender, useTrackInit, useTrackPageStay, useTrackRetryListener };
 export type { FailedTrackParams, TrackConfig, TrackGlobalConfig, TrackParams };

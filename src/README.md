@@ -3,7 +3,7 @@ src/
 ├── track/                  # 埋点相关核心模块（独立目录）
 │   ├── config.ts           # 全局配置相关（默认配置、修改配置方法）
 │   ├── hooks/              # 核心Hook拆分（按功能拆分文件）
-│   │   ├── index.ts        # Hook聚合导出
+│   │   ├── useTrackInit.ts # 初始化hooks
 │   │   ├── useTrack.ts     # 基础埋点Hook
 │   │   ├── useTrackClick.ts # 点击埋点Hook
 │   │   ├── useTrackExposure.ts # 曝光埋点Hook
@@ -11,9 +11,7 @@ src/
 │   │   ├── useFirstRender.ts # 组件首次渲染Hook
 │   │   └── useTrackCustom.ts # 自定义埋点Hook
 │   ├── core/               # 核心逻辑（非Hook的底层逻辑）
-│   │   ├── index.ts        # 核心逻辑聚合导出
 │   │   ├── sendTrack.ts    # 单条上报核心逻辑
-│   │   ├── sendBeaconTrack.ts    # 使用sendBeacon进行上报
 │   │   ├── batchTrack.ts   # 批量上报核心逻辑
 │   │   └── retryTrack.ts   # 失败重试核心逻辑
 │   └── listeners/          # 监听相关（如重试监听、页面可见性监听）

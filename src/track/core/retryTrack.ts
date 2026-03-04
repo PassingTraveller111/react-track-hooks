@@ -110,6 +110,7 @@ export const retryFailedTracks = async (force = false) => {
 
             try {
                 const response = await fetch(batchTrackUrl, {
+                    keepalive: true,
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(batchRetryTracks)
@@ -120,7 +121,7 @@ export const retryFailedTracks = async (force = false) => {
                     throw new Error(`批量接口返回异常：${response.status} ${response.statusText}`);
                 }
 
-                console.log('批量埋点重试成功：', batchRetryTracks.length, '条');
+                console.log('批量埋点重试成功：', batchRetryTracks.length, '条', batchRetryTracks);
                 // 过滤掉重试成功的埋点
                 failedTracks = failedTracks.filter(track =>
                     !retryableTracks.some(item => item.id === track.id)
@@ -141,6 +142,7 @@ export const retryFailedTracks = async (force = false) => {
                 try {
                     const response = await fetch(trackUrl, {
                         method: 'POST',
+                        keepalive: true,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             ...track,

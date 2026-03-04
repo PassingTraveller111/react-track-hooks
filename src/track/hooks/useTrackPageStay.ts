@@ -42,8 +42,6 @@ export const useTrackPageStay = (
     const startTimeRef = useRef<number | null>(null);
     // 用户最后一次活跃时间
     const lastActiveRef = useRef<number>(Date.now());
-    // 累计有效停留总时长
-    const totalValidDurationRef = useRef<number>(0);
     // 定时检查器引用
     const timerRef = useRef<number | null>(null);
     // 是否正在计时中
@@ -67,33 +65,14 @@ export const useTrackPageStay = (
          * 作用：刷新最后活跃时间；若已暂停则恢复计时
          */
         const markUserActive = () => {
+            // 用户活跃更新最后活跃时间
             lastActiveRef.current = Date.now();
             // 若当前未计时 + 页面可见 → 重新开始计时
             if (!isTrackingRef.current && document.visibilityState === "visible") {
+                console.log('用户重新活跃，重新开始计时')
                 startTimeRef.current = Date.now();
                 isTrackingRef.current = true;
             }
-        };
-
-        /**
-         * 停止当前计时片段
-         * 作用：计算本次片段时长 → 累加到总有效时长 → 重置计时状态
-         */
-        const stopTracking = () => {
-            // 未开始计时则直接返回
-            if (!startTimeRef.current || !isTrackingRef.current) return;
-            const now = Date.now();
-            const currentSegmentDuration = now - startTimeRef.current;
-            const { timeout } = getLastPageStayConfig()
-
-            // 只有在【超时时间内有操作】的片段才计入有效时长
-            if (now - lastActiveRef.current < timeout && currentSegmentDuration > 0) {
-                totalValidDurationRef.current += currentSegmentDuration;
-            }
-
-            // 重置当前计时状态
-            startTimeRef.current = null;
-            isTrackingRef.current = false;
         };
 
         /**
@@ -101,23 +80,24 @@ export const useTrackPageStay = (
          * isHidden：是否是页面隐藏/关闭触发，在页面隐藏/关闭时不走批量队列，直接单独上报
          */
         const reportValidStayTime = (isHidden = false) => {
-            // 先确保停止当前计时
-            stopTracking();
-
+            if (startTimeRef.current === null) return;
             const { minDuration, maxDuration } = getLastPageStayConfig();
+            // 上次活跃时间 - 本次计时开始时间 => 用户实际活跃时间
+            const operateTime = lastActiveRef.current - startTimeRef.current;
             // 限制最大时长，防止异常数据
-            const finalStayTime = Math.min(totalValidDurationRef.current, maxDuration);
-
+            const finalStayTime = Math.min(operateTime, maxDuration);
             if (finalStayTime >= minDuration) {
                 if(isHidden){
                     triggerSingleTrack({ stayTime: finalStayTime }) // 页面隐藏/关闭，直接走单独上报
                 }else{
-                    triggerTrack({ stayTime: finalStayTime }); // 非页面隐藏/关闭，直接走正常上报逻辑（如果配置了批量上报，就走批量上报）
+                    console.log('组件卸载/用户不活跃触发默认上报逻辑')
+                    triggerTrack({ stayTime: finalStayTime }); // 组件卸载/用户不活跃，直接走正常上报逻辑（如果配置了批量上报，就走批量上报）
                 }
+            }else{ // 过滤无效时长
+                console.log('页面停留时长小于minDuration，无效的上报数据')
             }
-
-            // 重置累计时长，避免重复上报
-            totalValidDurationRef.current = 0;
+            // 停止计时，下次活跃/切换进页面重新开始计时
+            isTrackingRef.current = false;
         };
 
         /**
@@ -134,8 +114,7 @@ export const useTrackPageStay = (
                 isTrackingRef.current = true;
             } else {
                 // 页面隐藏：立即暂停
-                stopTracking();
-                console.log('页面隐藏/关闭，触发上报')
+                console.log('页面隐藏/关闭，停止计时，触发上报')
                 reportValidStayTime(true); // 页面隐藏，走单独上报的逻辑
             }
         };
@@ -152,8 +131,6 @@ export const useTrackPageStay = (
             const { timeout } = getLastPageStayConfig();
             // 超过超时时间未操作 → 停止并上报
             if (now - lastActiveRef.current >= timeout) {
-                console.log('用户不活跃，停止计时并进行上报')
-                stopTracking();
                 reportValidStayTime(); // 用户不活跃上报，走正常逻辑
             }
         };
@@ -186,5 +163,5 @@ export const useTrackPageStay = (
             reportValidStayTime(); // 组件卸载进行上报，走默认逻辑
         };
 
-    }, [triggerTrack, triggerSingleTrack, eventName, customParams, config]);
+    }, [triggerTrack, triggerSingleTrack, config]);
 };
