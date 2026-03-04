@@ -143,3 +143,4 @@ export const initBatchTimer = (config: TrackConfig) => {
         processBatchQueue(config);
     }, batchConfig?.batchInterval || 5000);
 };
+

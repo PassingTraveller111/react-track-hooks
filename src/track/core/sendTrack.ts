@@ -42,9 +42,9 @@ export const sendTrack = async (params: TrackParams, config: TrackConfig) => {
         const response = await fetch(finalTrackUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
             body: JSON.stringify({
                 ...params,
-                keepalive: true,
                 timestamp: Date.now(),
                 userAgent: navigator.userAgent,
                 url: window.location.href,

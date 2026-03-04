@@ -62,7 +62,6 @@ function App() {
           minDuration: 2 * 1000, // 最短有效时间
           maxDuration: 2 * 60 * 1000, // 最长活跃时间
           checkInterval: 1000, // 检查用户是否活跃计时器
-          reportOnHidden: true, // 页面隐藏就触发上报
        }
     });
 
