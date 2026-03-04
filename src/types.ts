@@ -45,6 +45,7 @@ export interface TrackGlobalConfig {
         minDuration?: number; // 最短有效时间
         maxDuration?: number; // 最长单次计时（防止数据异常）
         checkInterval?: number; // 多长时间检查一次用户无操作时间
+        reportOnHidden?: boolean; // 是否在页面切后台时进行上报
     }
 }
 

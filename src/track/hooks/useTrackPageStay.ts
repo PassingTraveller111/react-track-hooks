@@ -29,17 +29,7 @@ export const useTrackPageStay = (
         config
     );
 
-    // 合并配置：默认 < 全局 < 入参（优先级从低到高）
-    const globalConfig = getTrackGlobalConfig();
-    const mergedPageStayConfig = {
-        ...DEFAULT_PAGE_STAY_CONFIG,
-        ...globalConfig.pageStayConfig,
-        ...config.pageStayConfig,
-    };
-
     // ===================== 持久化状态（不受渲染/闭包影响） =====================
-    // 停留时长配置引用
-    const pageStayConfigRef = useRef(mergedPageStayConfig);
     // 当前计时片段的开始时间
     const startTimeRef = useRef<number | null>(null);
     // 用户最后一次活跃时间
@@ -51,11 +41,18 @@ export const useTrackPageStay = (
     // 是否正在计时中
     const isTrackingRef = useRef(false);
 
-    // 每次渲染都更新为最新配置
-    pageStayConfigRef.current = mergedPageStayConfig;
 
     // ===================== 副作用：监听页面状态 & 用户行为 =====================
     useEffect(() => {
+        const getLastPageStayConfig = () => {
+            // 合并配置：默认 < 全局 < 入参（优先级从低到高）
+            const globalConfig = getTrackGlobalConfig();
+            return {
+                ...DEFAULT_PAGE_STAY_CONFIG,
+                ...globalConfig.pageStayConfig,
+                ...config.pageStayConfig,
+            };
+        }
         /**
          * 标记用户活跃
          * 触发条件：鼠标移动/点击/滚动/键盘/触屏
@@ -77,10 +74,9 @@ export const useTrackPageStay = (
         const stopTracking = () => {
             // 未开始计时则直接返回
             if (!startTimeRef.current || !isTrackingRef.current) return;
-
             const now = Date.now();
             const currentSegmentDuration = now - startTimeRef.current;
-            const { timeout } = pageStayConfigRef.current;
+            const { timeout } = getLastPageStayConfig()
 
             // 只有在【超时时间内有操作】的片段才计入有效时长
             if (now - lastActiveRef.current < timeout && currentSegmentDuration > 0) {
@@ -100,7 +96,7 @@ export const useTrackPageStay = (
             // 先确保停止当前计时
             stopTracking();
 
-            const { minDuration, maxDuration } = pageStayConfigRef.current;
+            const { minDuration, maxDuration } = getLastPageStayConfig();
             // 限制最大时长，防止异常数据
             const finalStayTime = Math.min(totalValidDurationRef.current, maxDuration);
 
@@ -113,10 +109,10 @@ export const useTrackPageStay = (
                 };
 
                 if (isUnload) {
-                    // 👇 卸载场景：sendBeacon 保证送达
+                    // 卸载场景：sendBeacon 保证送达
                     sendBeaconTrack(trackParams, config);
                 } else {
-                    // 👇 正常场景：进入批量队列
+                    // 正常场景：进入批量队列
                     triggerTrack({ stayTime: finalStayTime });
                 }
             }
@@ -131,7 +127,9 @@ export const useTrackPageStay = (
          * 隐藏 → 暂停计时
          */
         const handleVisibilityChange = () => {
+            const { reportOnHidden } = getLastPageStayConfig();
             if (document.visibilityState === "visible") {
+                console.log('页面可见，重新开始计时')
                 // 页面可见：重新开始计时
                 startTimeRef.current = Date.now();
                 lastActiveRef.current = Date.now();
@@ -139,6 +137,10 @@ export const useTrackPageStay = (
             } else {
                 // 页面隐藏：立即暂停
                 stopTracking();
+                if (reportOnHidden) { // 页面隐藏时是否触发上报
+                    console.log('页面隐藏，触发上报')
+                    reportValidStayTime();
+                }
             }
         };
 
@@ -151,10 +153,10 @@ export const useTrackPageStay = (
             if (!isTrackingRef.current) return;
 
             const now = Date.now();
-            const { timeout } = pageStayConfigRef.current;
-
+            const { timeout } = getLastPageStayConfig();
             // 超过超时时间未操作 → 停止并上报
             if (now - lastActiveRef.current >= timeout) {
+                console.log('用户不活跃，停止计时并进行上报')
                 stopTracking();
                 reportValidStayTime(); // 正常队列
             }
@@ -176,7 +178,7 @@ export const useTrackPageStay = (
         }
 
         // ===================== 启动活跃检查定时器 =====================
-        const { checkInterval } = pageStayConfigRef.current;
+        const { checkInterval } = getLastPageStayConfig();
         timerRef.current = setInterval(checkActiveStatus, checkInterval);
 
         // ===================== 页面关闭/刷新时上报（使用 Beacon） =====================
@@ -192,7 +194,7 @@ export const useTrackPageStay = (
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             window.removeEventListener("beforeunload", handleBeforeUnload);
 
-            reportValidStayTime(true); // 组件写真进行上报
+            reportValidStayTime(true); // 组件卸载进行上报
         };
 
     }, [triggerTrack, eventName, customParams, config]);

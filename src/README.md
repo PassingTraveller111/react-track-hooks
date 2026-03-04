@@ -13,6 +13,7 @@ src/
 │   ├── core/               # 核心逻辑（非Hook的底层逻辑）
 │   │   ├── index.ts        # 核心逻辑聚合导出
 │   │   ├── sendTrack.ts    # 单条上报核心逻辑
+│   │   ├── sendBeaconTrack.ts    # 使用sendBeacon进行上报
 │   │   ├── batchTrack.ts   # 批量上报核心逻辑
 │   │   └── retryTrack.ts   # 失败重试核心逻辑
 │   └── listeners/          # 监听相关（如重试监听、页面可见性监听）

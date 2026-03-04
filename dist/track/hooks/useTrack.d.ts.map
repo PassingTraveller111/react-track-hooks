@@ -1,1 +1,1 @@
-{"version":3,"file":"useTrack.d.ts","sourceRoot":"","sources":["../../../src/track/hooks/useTrack.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,WAAW,EAAE,WAAW,EAAC,MAAM,aAAa,CAAC;AAKrD;;;;;GAKG;AACH,eAAO,MAAM,QAAQ,GAAI,QAAQ,WAAW,EAAE,SAAQ,WAAgB;;CAmBrE,CAAC"}
+{"version":3,"file":"useTrack.d.ts","sourceRoot":"","sources":["../../../src/track/hooks/useTrack.ts"],"names":[],"mappings":"AAAA,OAAO,EAAC,WAAW,EAAE,WAAW,EAAC,MAAM,aAAa,CAAC;AAKrD;;;;;GAKG;AACH,eAAO,MAAM,QAAQ,GAAI,QAAQ,WAAW,EAAE,SAAQ,WAAgB;;CAsBrE,CAAC"}

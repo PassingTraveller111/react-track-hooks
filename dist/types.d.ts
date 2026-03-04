@@ -28,6 +28,13 @@ export interface TrackGlobalConfig {
         exposureOnce?: boolean;
         exposureThreshold?: number;
     };
+    pageStayConfig?: {
+        timeout?: number;
+        minDuration?: number;
+        maxDuration?: number;
+        checkInterval?: number;
+        reportOnHidden?: boolean;
+    };
 }
 export interface TrackConfig extends Partial<TrackGlobalConfig> {
     exposureOnce?: boolean;

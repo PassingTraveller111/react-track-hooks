@@ -30,6 +30,13 @@ const DEFAULT_TRACK_CONFIG = {
     exposureConfig: {
         exposureOnce: true,
         exposureThreshold: 0.5,
+    },
+    pageStayConfig: {
+        timeout: 30 * 60 * 1000, // 30分钟无操作超时
+        minDuration: 2000, // 最小有效时长2秒（低于则丢弃）
+        maxDuration: 60 * 60 * 1000, // 最大单次时长60分钟（防止异常数据）
+        checkInterval: 1000, // 每秒检查一次活跃状态
+        reportOnHidden: true, // 页面切后台就立即上报，防止数据丢失
     }
 };
 // 私有全局配置（仅内部可直接访问）
@@ -88,6 +95,48 @@ const safeLocalStorageSet = (key, data) => {
     catch (error) {
         console.error('写入localStorage失败：', error);
     }
+};
+/**
+ * 生成唯一的埋点事件 ID
+ * @param eventName 事件名称（用于区分事件类型）
+ * @returns 唯一事件 ID（格式：${eventName}_${时间戳}_${固定长度随机串}）
+ */
+const getEventId = (eventName) => {
+    try {
+        // 1. 校验入参，避免空值/非法值导致 ID 异常
+        if (!eventName || typeof eventName !== 'string') {
+            console.warn('getEventId: eventName 必须为非空字符串，已使用默认值');
+            eventName = 'unknown_event';
+        }
+        // 2. 时间戳（精确到毫秒，可升级为微秒提升精度）
+        const timestamp = Date.now();
+        // 可选：浏览器支持的话，用 performance.now() 拿到微秒级时间戳，降低重复概率
+        // const preciseTimestamp = performance.now().toString().replace('.', '');
+        // 3. 生成固定长度（16位）的随机字符串，保证唯一性
+        const randomStr = generateFixedLengthRandomStr(16);
+        // 4. 拼接最终 ID（用下划线分隔，便于解析）
+        return `${eventName}_${timestamp}_${randomStr}`;
+    }
+    catch (err) {
+        // 兜底：异常时生成极简 ID，避免埋点流程中断
+        console.error('getEventId 生成失败：', err);
+        return `fallback_${Date.now()}_${Math.random().toString().slice(2, 10)}`;
+    }
+};
+/**
+ * 生成固定长度的随机字符串（数字+字母）
+ * @param length 目标长度（默认16位）
+ * @returns 固定长度的随机字符串
+ */
+const generateFixedLengthRandomStr = (length = 16) => {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        // 用 Math.floor 保证取整，避免越界
+        const randomIndex = Math.floor(Math.random() * chars.length);
+        result += chars[randomIndex];
+    }
+    return result;
 };
 
 /**
@@ -338,7 +387,7 @@ const processBatchQueue = async (config) => {
             console.warn(`批量上报失败，${tracksToUpload.length}条数据转入失败队列`);
             const failedTracks = getFailedTracks();
             const newFailedTracks = tracksToUpload.map(track => ({
-                id: `${track.eventName}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                id: getEventId(track.eventName),
                 ...track,
                 retryTime: Date.now(),
                 retryCount: 0
@@ -448,7 +497,7 @@ const sendTrack = async (params, config) => {
         console.error('埋点上报失败：', error);
         const failedTracks = getFailedTracks();
         failedTracks.push({
-            id: `${params.eventName}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            id: getEventId(params.eventName),
             ...params,
             retryTime: Date.now(),
             retryCount: 0
@@ -464,20 +513,21 @@ const sendTrack = async (params, config) => {
  * @returns 包含触发埋点方法的对象
  */
 const useTrack = (params, config = {}) => {
-    // 合并默认配置（含全局配置）和单个 Hook 配置
-    const mergedConfig = { ...getTrackGlobalConfig(), ...config };
+    const latestConfigRef = react.useRef(config);
     const trackRef = react.useRef(params);
-    react.useEffect(() => {
-        trackRef.current = params;
-    }, [params]);
+    latestConfigRef.current = config;
+    trackRef.current = params;
+    // 触发时可以覆盖定义时的params
     const triggerTrack = react.useCallback((customParams = {}) => {
+        // 合并默认配置（含全局配置）和单个 Hook 配置
+        const mergedConfig = { ...getTrackGlobalConfig(), ...latestConfigRef.current };
         const finalParams = {
             ...trackRef.current,
             ...customParams
         };
         // 把 mergedConfig 传给 sendTrack，支持覆盖 trackUrl
         sendTrack(finalParams, mergedConfig);
-    }, [mergedConfig]);
+    }, []);
     return { triggerTrack };
 };
 
@@ -520,10 +570,11 @@ const useTrackCustom = (eventName, customParams = {}, config = {}) => {
 const useTrackExposure = (eventName, customParams = {}, config = {}) => {
     const mergedConfig = { ...getTrackGlobalConfig(), ...config };
     const { triggerTrack } = useTrack({ eventName, type: exports.TrackType.EXPOSURE, ...customParams }, mergedConfig);
+    const latestConfigRef = react.useRef(mergedConfig);
     const targetRef = react.useRef(null);
     const hasReported = react.useRef(false);
     react.useEffect(() => {
-        if (!mergedConfig.enable)
+        if (!latestConfigRef.current.enable)
             return;
         const observer = new IntersectionObserver((entries) => {
             entries.forEach((entry) => {
@@ -534,13 +585,13 @@ const useTrackExposure = (eventName, customParams = {}, config = {}) => {
                         exposureTime: Date.now()
                     };
                     triggerTrack(exposureParams);
-                    if (mergedConfig.exposureOnce) {
+                    if (latestConfigRef.current.exposureOnce) {
                         hasReported.current = true;
                         observer.unobserve(entry.target);
                     }
                 }
             });
-        }, { threshold: mergedConfig.exposureThreshold });
+        }, { threshold: latestConfigRef.current.exposureThreshold });
         const target = targetRef.current;
         if (target)
             observer.observe(target);
@@ -549,10 +600,57 @@ const useTrackExposure = (eventName, customParams = {}, config = {}) => {
                 observer.unobserve(target);
             observer.disconnect();
         };
-    }, [mergedConfig, triggerTrack]);
+    }, [triggerTrack]);
     return targetRef;
 };
 
+/**
+ * 页面卸载时专用上报方法（使用 navigator.sendBeacon）
+ * 不会进入批量队列，不会丢失，浏览器保证发送
+ */
+const sendBeaconTrack = async (params, config = {}) => {
+    var _a;
+    // 服务端不执行
+    if (!isClient())
+        return;
+    if (!params.eventName) {
+        console.warn(" Beacon 埋点缺少必要参数：eventName");
+        return;
+    }
+    const GLOBAL_TRACK_CONFIG = getTrackGlobalConfig();
+    const finalTrackUrl = config.trackUrl || GLOBAL_TRACK_CONFIG.trackUrl;
+    const isEnable = (_a = config.enable) !== null && _a !== void 0 ? _a : GLOBAL_TRACK_CONFIG.enable;
+    if (!isEnable)
+        return;
+    try {
+        const data = JSON.stringify({
+            ...params,
+            timestamp: Date.now(),
+            userAgent: navigator.userAgent,
+            url: window.location.href,
+            referrer: document.referrer,
+        });
+        if (navigator.sendBeacon) {
+            // 发送 Blob 格式，兼容性最好，服务端解析最稳
+            const blob = new Blob([data], { type: "application/json" });
+            navigator.sendBeacon(finalTrackUrl, blob);
+        }
+        else {
+            // 浏览器不支持 sendBeacon，跳过上报
+        }
+    }
+    catch (err) {
+        console.error(" Beacon 埋点发送失败：", err);
+    }
+};
+
+// 默认配置（兜底值，全局配置可覆盖）
+const DEFAULT_PAGE_STAY_CONFIG = {
+    timeout: 30 * 60 * 1000, // 30分钟无操作 → 暂停计时
+    minDuration: 2000, // 最小有效时长2秒，低于不上报
+    maxDuration: 60 * 60 * 1000, // 最大单页时长60分钟，防止异常数据
+    checkInterval: 1000, // 每秒检查一次活跃状态
+};
 /**
  * 页面停留时长埋点 Hook - 自动监听页面/组件的停留时长并上报
  * @param eventName 停留时长事件名称（必填）
@@ -560,29 +658,160 @@ const useTrackExposure = (eventName, customParams = {}, config = {}) => {
  * @param config 埋点配置项（可选）
  */
 const useTrackPageStay = (eventName, customParams = {}, config = {}) => {
+    // 初始化埋点上报方法
     const { triggerTrack } = useTrack({ eventName, type: exports.TrackType.PAGE_STAY, ...customParams }, config);
-    const startTime = react.useRef(Date.now());
+    // ===================== 持久化状态（不受渲染/闭包影响） =====================
+    // 当前计时片段的开始时间
+    const startTimeRef = react.useRef(null);
+    // 用户最后一次活跃时间
+    const lastActiveRef = react.useRef(Date.now());
+    // 累计有效停留总时长
+    const totalValidDurationRef = react.useRef(0);
+    // 定时检查器引用
+    const timerRef = react.useRef(null);
+    // 是否正在计时中
+    const isTrackingRef = react.useRef(false);
+    // ===================== 副作用：监听页面状态 & 用户行为 =====================
     react.useEffect(() => {
+        const getLastPageStayConfig = () => {
+            // 合并配置：默认 < 全局 < 入参（优先级从低到高）
+            const globalConfig = getTrackGlobalConfig();
+            return {
+                ...DEFAULT_PAGE_STAY_CONFIG,
+                ...globalConfig.pageStayConfig,
+                ...config.pageStayConfig,
+            };
+        };
+        /**
+         * 标记用户活跃
+         * 触发条件：鼠标移动/点击/滚动/键盘/触屏
+         * 作用：刷新最后活跃时间；若已暂停则恢复计时
+         */
+        const markUserActive = () => {
+            lastActiveRef.current = Date.now();
+            // 若当前未计时 + 页面可见 → 重新开始计时
+            if (!isTrackingRef.current && document.visibilityState === "visible") {
+                startTimeRef.current = Date.now();
+                isTrackingRef.current = true;
+            }
+        };
+        /**
+         * 停止当前计时片段
+         * 作用：计算本次片段时长 → 累加到总有效时长 → 重置计时状态
+         */
+        const stopTracking = () => {
+            // 未开始计时则直接返回
+            if (!startTimeRef.current || !isTrackingRef.current)
+                return;
+            const now = Date.now();
+            const currentSegmentDuration = now - startTimeRef.current;
+            const { timeout } = getLastPageStayConfig();
+            // 只有在【超时时间内有操作】的片段才计入有效时长
+            if (now - lastActiveRef.current < timeout && currentSegmentDuration > 0) {
+                totalValidDurationRef.current += currentSegmentDuration;
+            }
+            // 重置当前计时状态
+            startTimeRef.current = null;
+            isTrackingRef.current = false;
+        };
+        /**
+         * 上报最终有效停留时长
+         * isUnload：是否页面卸载（卸载使用 sendBeacon）
+         */
+        const reportValidStayTime = (isUnload = false) => {
+            // 先确保停止当前计时
+            stopTracking();
+            const { minDuration, maxDuration } = getLastPageStayConfig();
+            // 限制最大时长，防止异常数据
+            const finalStayTime = Math.min(totalValidDurationRef.current, maxDuration);
+            if (finalStayTime >= minDuration) {
+                const trackParams = {
+                    eventName,
+                    type: exports.TrackType.PAGE_STAY,
+                    stayTime: finalStayTime,
+                    ...customParams,
+                };
+                if (isUnload) {
+                    // 卸载场景：sendBeacon 保证送达
+                    sendBeaconTrack(trackParams, config);
+                }
+                else {
+                    // 正常场景：进入批量队列
+                    triggerTrack({ stayTime: finalStayTime });
+                }
+            }
+            // 重置累计时长，避免重复上报
+            totalValidDurationRef.current = 0;
+        };
+        /**
+         * 页面可见性变化监听
+         * 显示 → 开始/恢复计时
+         * 隐藏 → 暂停计时
+         */
         const handleVisibilityChange = () => {
-            if (document.hidden) {
-                const stayTime = Date.now() - startTime.current;
-                triggerTrack({ stayTime });
+            const { reportOnHidden } = getLastPageStayConfig();
+            if (document.visibilityState === "visible") {
+                console.log('页面可见，重新开始计时');
+                // 页面可见：重新开始计时
+                startTimeRef.current = Date.now();
+                lastActiveRef.current = Date.now();
+                isTrackingRef.current = true;
             }
             else {
-                startTime.current = Date.now();
+                // 页面隐藏：立即暂停
+                stopTracking();
+                if (reportOnHidden) { // 页面隐藏时是否触发上报
+                    console.log('页面隐藏，触发上报');
+                    reportValidStayTime();
+                }
             }
         };
+        /**
+         * 定时检查用户活跃状态
+         * 每秒执行一次
+         * 超过配置的无操作时间 → 停止计时并上报
+         */
+        const checkActiveStatus = () => {
+            if (!isTrackingRef.current)
+                return;
+            const now = Date.now();
+            const { timeout } = getLastPageStayConfig();
+            // 超过超时时间未操作 → 停止并上报
+            if (now - lastActiveRef.current >= timeout) {
+                console.log('用户不活跃，停止计时并进行上报');
+                stopTracking();
+                reportValidStayTime(); // 正常队列
+            }
+        };
+        // ===================== 绑定事件监听 =====================
+        // 用户活跃行为事件列表
+        const activeEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"];
+        activeEvents.forEach(evt => window.addEventListener(evt, markUserActive));
+        // 页面显隐切换
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        // ===================== 初始化计时 =====================
+        if (document.visibilityState === "visible") {
+            startTimeRef.current = Date.now();
+            lastActiveRef.current = Date.now();
+            isTrackingRef.current = true;
+        }
+        // ===================== 启动活跃检查定时器 =====================
+        const { checkInterval } = getLastPageStayConfig();
+        timerRef.current = setInterval(checkActiveStatus, checkInterval);
+        // ===================== 页面关闭/刷新时上报（使用 Beacon） =====================
         const handleBeforeUnload = () => {
-            const stayTime = Date.now() - startTime.current;
-            triggerTrack({ stayTime });
+            reportValidStayTime(true);
         };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        window.addEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        // ===================== 清理副作用（组件卸载/页面离开） =====================
         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            window.removeEventListener('beforeunload', handleBeforeUnload);
+            clearInterval(timerRef.current);
+            activeEvents.forEach(evt => window.removeEventListener(evt, markUserActive));
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+            reportValidStayTime(true); // 组件卸载进行上报
         };
-    }, [triggerTrack]);
+    }, [triggerTrack, eventName, customParams, config]);
 };
 
 // 单例锁（全局变量）
