@@ -43,7 +43,7 @@ export const useTrackPageStay = (
     // 用户最后一次活跃时间
     const lastActiveRef = useRef<number>(Date.now());
     // 定时检查器引用
-    const timerRef = useRef<number | null>(null);
+    const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // 是否正在计时中
     const isTrackingRef = useRef(false);
 
@@ -156,7 +156,7 @@ export const useTrackPageStay = (
 
         // ===================== 清理副作用（组件卸载/页面离开） =====================
         return () => {
-            clearInterval(timerRef.current!);
+            if (timerRef.current) clearInterval(timerRef.current);
             activeEvents.forEach(evt => window.removeEventListener(evt, markUserActive));
             document.removeEventListener("visibilitychange", handleVisibilityChange);
 

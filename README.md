@@ -36,38 +36,40 @@ pnpm add react-track-hooks
 
 ```tsx
 import { useEffect } from "react";
-import {setTrackGlobalConfig, useTrackRetryListener, InitBatchTracker, DestroyBatchTracker} from 'react-track-hooks';
+import { setTrackGlobalConfig, useTrackRetryListener, InitBatchTracker, DestroyBatchTracker } from 'react-track-hooks';
+
+const trackConfig = {
+   trackUrl: '/api/track',
+   batchTrackUrl: '/api/track/batch',
+   enable: true,
+   enableBatch: true,
+   retryConfig: {
+      maxRetryTimes: 3,
+      initialDelay: 1000,
+      delayMultiplier: 2
+   },
+   batchConfig: {
+      batchSize: 10,
+      batchInterval: 5000,
+   },
+   exposureConfig: {
+      exposureOnce: true,
+      exposureThreshold: 0.5,
+   },
+   pageStayConfig: {
+      timeout: 30 * 1000, // 用户不活跃时间
+      minDuration: 2 * 1000, // 最短有效时间
+      maxDuration: 2 * 60 * 1000, // 最长活跃时间
+      checkInterval: 1000, // 检查用户是否活跃计时器
+   }
+};
 
 function App() {
    useEffect(() => {
       // 全局埋点配置（只执行一次）
-      setTrackGlobalConfig({
-         trackUrl: '/api/track',
-         batchTrackUrl: '/api/track/batch',
-         enable: true,
-         enableBatch: true,
-         retryConfig: {
-            maxRetryTimes: 3,
-            initialDelay: 1000,
-            delayMultiplier: 2
-         },
-         batchConfig: {
-            batchSize: 10,
-            batchInterval: 5000,
-         },
-         exposureConfig: {
-            exposureOnce: true,
-            exposureThreshold: 0.5,
-         },
-         pageStayConfig: {
-            timeout: 30 * 1000, // 用户不活跃时间
-            minDuration: 2 * 1000, // 最短有效时间
-            maxDuration: 2 * 60 * 1000, // 最长活跃时间
-            checkInterval: 1000, // 检查用户是否活跃计时器
-         }
-      });
+      setTrackGlobalConfig(trackConfig);
       // 启用批量上报定时器以及页面卸载/关闭监听
-      InitBatchTracker(config);
+      InitBatchTracker(trackConfig);
       // 启用失败埋点自动重试监听（全局只执行一次）
       useTrackRetryListener();
       return () => {
@@ -85,36 +87,38 @@ function App() {
 import { useEffect } from "react";
 import { setTrackGlobalConfig, useTrackRetryListener, InitBatchTracker, DestroyBatchTracker } from 'react-track-hooks';
 
+const trackConfig = {
+   trackUrl: '/api/track',
+   batchTrackUrl: '/api/track/batch',
+   enable: true,
+   enableBatch: true,
+   retryConfig: {
+      maxRetryTimes: 3,
+      initialDelay: 1000,
+      delayMultiplier: 2
+   },
+   batchConfig: {
+      batchSize: 10,
+      batchInterval: 5000,
+   },
+   exposureConfig: {
+      exposureOnce: true,
+      exposureThreshold: 0.5,
+   },
+   pageStayConfig: {
+      timeout: 30 * 1000, // 用户不活跃时间
+      minDuration: 2 * 1000, // 最短有效时间
+      maxDuration: 2 * 60 * 1000, // 最长活跃时间
+      checkInterval: 1000, // 检查用户是否活跃计时器
+   }
+};
+
 export const TrackProvider = () => {
    useEffect(() => {
       // 全局埋点配置（只执行一次）
-      setTrackGlobalConfig({
-         trackUrl: '/api/track',
-         batchTrackUrl: '/api/track/batch',
-         enable: true,
-         enableBatch: true,
-         retryConfig: {
-            maxRetryTimes: 3,
-            initialDelay: 1000,
-            delayMultiplier: 2
-         },
-         batchConfig: {
-            batchSize: 10,
-            batchInterval: 5000,
-         },
-         exposureConfig: {
-            exposureOnce: true,
-            exposureThreshold: 0.5,
-         },
-         pageStayConfig: {
-            timeout: 30 * 1000, // 用户不活跃时间
-            minDuration: 2 * 1000, // 最短有效时间
-            maxDuration: 2 * 60 * 1000, // 最长活跃时间
-            checkInterval: 1000, // 检查用户是否活跃计时器
-         }
-      });
+      setTrackGlobalConfig(trackConfig);
       // 启用批量上报定时器以及页面卸载/关闭监听
-      InitBatchTracker(config);
+      InitBatchTracker(trackConfig);
       // 启用失败埋点自动重试监听（全局只执行一次）
       useTrackRetryListener();
       return () => {
@@ -239,7 +243,7 @@ function HomePage() {
 
 #### 组件首次渲染埋点
 ```tsx
-import { useTrackFirstRender } from '@/track/hooks/useTrackFirstRender';
+import { useTrackFirstRender } from 'react-track-hooks';
 
 const MyComponent = () => {
    // 组件首次渲染时触发埋点

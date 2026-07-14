@@ -5,6 +5,8 @@ export * from './types';
 export { setTrackGlobalConfig, getTrackGlobalConfig } from './track/config';
 // 导出重试核心函数
 export { getFailedTracks, saveFailedTracks, retryFailedTracks} from './track/core/retryTrack';
+// 导出批量上报初始化函数
+export { InitBatchTracker, DestroyBatchTracker } from './track/core/sendBatchTrack';
 
 // 导出所有 Hooks
 export { useTrack } from './track/hooks/useTrack';

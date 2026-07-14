@@ -9,7 +9,7 @@ import {getEventId} from "../../utils";
 // 内存中的批量上报队列
 export let BATCH_TRACK_QUEUE: TrackParams[] = [];
 // 批量上报定时器
-export let BATCH_TIMER: number | null = null;
+export let BATCH_TIMER: ReturnType<typeof setTimeout> | null = null;
 // 防止并发上报的锁
 export let isBatchUploading = false;
 

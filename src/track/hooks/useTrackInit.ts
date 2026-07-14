@@ -13,18 +13,22 @@ export const useTrackInit = (config: TrackGlobalConfig) => {
 
     useEffect(() => {
         if (isInitialized.current) return;
-        if (!config.enableBatch) return; // 开启批量上报
         // 1. 设置配置
         setTrackGlobalConfig(config);
 
         // 2. 初始化批量上报调度系统（包含定时器和生命周期监听）
-        InitBatchTracker(config);
+        const shouldInitBatchTracker = config.enableBatch ?? true;
+        if (shouldInitBatchTracker) {
+            InitBatchTracker(config);
+        }
 
         isInitialized.current = true;
         // console.log("埋点系统初始化完成");
         return () => {
             // 3. 清理批量埋点上报系统
-            DestroyBatchTracker();
+            if (shouldInitBatchTracker) {
+                DestroyBatchTracker();
+            }
         }
     }, [config]);
 
