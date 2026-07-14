@@ -16,13 +16,20 @@ export const useTrackExposure = <T extends HTMLElement = HTMLElement>(
     customParams: Record<string, any> = {},
     config: TrackConfig = {}
 ) => {
-    const mergedConfig = { ...getTrackGlobalConfig(), ...config };
+    const globalConfig = getTrackGlobalConfig();
+    const mergedConfig = {
+        ...globalConfig,
+        ...config,
+        exposureOnce: config.exposureOnce ?? globalConfig.exposureConfig?.exposureOnce,
+        exposureThreshold: config.exposureThreshold ?? globalConfig.exposureConfig?.exposureThreshold,
+    };
     const { triggerTrack } = useTrack(
         { eventName, type: TrackType.EXPOSURE, ...customParams },
         mergedConfig
     );
 
     const latestConfigRef = useRef(mergedConfig)
+    latestConfigRef.current = mergedConfig;
 
     const targetRef = useRef<T>(null);
     const hasReported = useRef(false);
@@ -58,7 +65,7 @@ export const useTrackExposure = <T extends HTMLElement = HTMLElement>(
             if (target) observer.unobserve(target);
             observer.disconnect();
         };
-    }, [triggerTrack]);
+    }, [triggerTrack, mergedConfig.enable, mergedConfig.exposureOnce, mergedConfig.exposureThreshold]);
 
     return targetRef;
 };

@@ -140,6 +140,28 @@ describe('track hooks', () => {
         expect(observer.unobserve).not.toHaveBeenCalledWith(target);
     });
 
+    it('useTrackExposure uses global exposure config by default', async () => {
+        setTrackGlobalConfig({ exposureConfig: { exposureOnce: false, exposureThreshold: 0.5 } });
+
+        const ExposureTarget = () => {
+            const ref = useTrackExposure<HTMLDivElement>('global_exposure');
+
+            return <div ref={ref}>card</div>;
+        };
+
+        const { container } = render(<ExposureTarget />);
+        const target = container.firstElementChild as Element;
+        const observer = MockIntersectionObserver.instances[0];
+
+        act(() => {
+            observer.trigger([{ isIntersecting: true, target, intersectionRatio: 0.8 }]);
+            observer.trigger([{ isIntersecting: true, target, intersectionRatio: 0.9 }]);
+        });
+
+        await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+        expect(observer.unobserve).not.toHaveBeenCalledWith(target);
+    });
+
     it('useTrackExposure does not observe when disabled', () => {
         const ExposureTarget = () => {
             const ref = useTrackExposure<HTMLDivElement>('disabled_exposure', {}, { enable: false });

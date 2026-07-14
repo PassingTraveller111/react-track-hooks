@@ -48,8 +48,15 @@ export interface TrackGlobalConfig {
     }
 }
 
+export type TrackGlobalConfigInput = Omit<Partial<TrackGlobalConfig>, 'retryConfig' | 'batchConfig' | 'exposureConfig' | 'pageStayConfig'> & {
+    retryConfig?: Partial<NonNullable<TrackGlobalConfig['retryConfig']>>;
+    batchConfig?: Partial<NonNullable<TrackGlobalConfig['batchConfig']>>;
+    exposureConfig?: Partial<NonNullable<TrackGlobalConfig['exposureConfig']>>;
+    pageStayConfig?: Partial<NonNullable<TrackGlobalConfig['pageStayConfig']>>;
+};
+
 // TrackConfig 继承并扩展全局配置，支持单个 Hook 覆盖
-export interface TrackConfig extends Partial<TrackGlobalConfig> {
+export type TrackConfig = TrackGlobalConfigInput & {
     exposureOnce?: boolean; // 曝光埋点仅生效一次
     exposureThreshold?: number; // 曝光埋点的阈值
 }

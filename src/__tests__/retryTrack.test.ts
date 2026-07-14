@@ -52,6 +52,8 @@ describe('retryTrack', () => {
         await retryFailedTracks(true);
 
         expect(fetch).toHaveBeenCalledWith('/batch-track', expect.objectContaining({ method: 'POST' }));
+        const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+        expect(body.tracks).toHaveLength(1);
         expect(getFailedTracks()).toHaveLength(0);
     });
 

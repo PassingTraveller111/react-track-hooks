@@ -65,13 +65,14 @@ const trackConfig = {
 };
 
 function App() {
+   // 启用失败埋点自动重试监听（全局只执行一次）
+   useTrackRetryListener();
+
    useEffect(() => {
       // 全局埋点配置（只执行一次）
       setTrackGlobalConfig(trackConfig);
       // 启用批量上报定时器以及页面卸载/关闭监听
       InitBatchTracker(trackConfig);
-      // 启用失败埋点自动重试监听（全局只执行一次）
-      useTrackRetryListener();
       return () => {
          DestroyBatchTracker()
       }
@@ -114,13 +115,14 @@ const trackConfig = {
 };
 
 export const TrackProvider = () => {
+   // 启用失败埋点自动重试监听（全局只执行一次）
+   useTrackRetryListener();
+
    useEffect(() => {
       // 全局埋点配置（只执行一次）
       setTrackGlobalConfig(trackConfig);
       // 启用批量上报定时器以及页面卸载/关闭监听
       InitBatchTracker(trackConfig);
-      // 启用失败埋点自动重试监听（全局只执行一次）
-      useTrackRetryListener();
       return () => {
          DestroyBatchTracker()
       }

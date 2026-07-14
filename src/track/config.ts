@@ -1,5 +1,5 @@
 // 全局配置（默认值），并提供修改全局配置的方法
-import { TrackGlobalConfig } from "../types";
+import { TrackGlobalConfig, TrackGlobalConfigInput } from "../types";
 
 // 定义默认配置（私有，不对外暴露）
 const DEFAULT_TRACK_CONFIG: TrackGlobalConfig = {
@@ -36,16 +36,34 @@ let _GLOBAL_TRACK_CONFIG: TrackGlobalConfig = { ...DEFAULT_TRACK_CONFIG };
  * @param config 要覆盖的配置（支持部分覆盖）
  * @returns 最新的全局配置（只读副本）
  */
-export const setTrackGlobalConfig = (config: Partial<TrackGlobalConfig>): Readonly<TrackGlobalConfig> => {
+export const setTrackGlobalConfig = (config: TrackGlobalConfigInput): Readonly<TrackGlobalConfig> => {
     if (typeof config !== 'object' || config === null) {
         console.warn('setTrackGlobalConfig 入参必须为对象，已忽略');
         return getTrackGlobalConfig();
     }
 
-    // 分步合并配置，同时做合法性校验
+    // 嵌套配置需要保留未覆盖的默认字段，避免局部配置丢失其它配置项。
     _GLOBAL_TRACK_CONFIG = {
         ..._GLOBAL_TRACK_CONFIG,
         ...config,
+        retryConfig: {
+            ...DEFAULT_TRACK_CONFIG.retryConfig!,
+            ..._GLOBAL_TRACK_CONFIG.retryConfig,
+            ...config.retryConfig,
+        },
+        batchConfig: {
+            ...DEFAULT_TRACK_CONFIG.batchConfig!,
+            ..._GLOBAL_TRACK_CONFIG.batchConfig,
+            ...config.batchConfig,
+        },
+        exposureConfig: {
+            ..._GLOBAL_TRACK_CONFIG.exposureConfig,
+            ...config.exposureConfig,
+        },
+        pageStayConfig: {
+            ..._GLOBAL_TRACK_CONFIG.pageStayConfig,
+            ...config.pageStayConfig,
+        },
     };
 
     console.debug('全局埋点配置已更新：', _GLOBAL_TRACK_CONFIG);

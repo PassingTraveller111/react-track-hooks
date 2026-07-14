@@ -118,7 +118,7 @@ export const retryFailedTracks = async (force = false) => {
                     keepalive: true,
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(batchRetryTracks)
+                    body: JSON.stringify({ tracks: batchRetryTracks })
                 });
 
                 // 检查接口响应状态

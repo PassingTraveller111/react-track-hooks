@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import {TrackGlobalConfig} from "../../types";
+import {TrackGlobalConfigInput} from "../../types";
 import {setTrackGlobalConfig} from "../config";
 import {DestroyBatchTracker, InitBatchTracker} from "../core/sendBatchTrack";
 import {useTrackRetryListener} from "../listeners/useTrackRetryListener";
@@ -8,7 +8,7 @@ import {useTrackRetryListener} from "../listeners/useTrackRetryListener";
  * 埋点初始化 Hook
  * @param config 全局埋点配置
  */
-export const useTrackInit = (config: TrackGlobalConfig) => {
+export const useTrackInit = (config: TrackGlobalConfigInput) => {
     const isInitialized = useRef(false);
 
     useEffect(() => {
