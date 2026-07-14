@@ -95,7 +95,12 @@ export const retryFailedTracks = async (force = false) => {
             return timeCondition;
         });
 
-        if (retryableTracks.length === 0) return;
+        if (retryableTracks.length === 0) {
+            if (expiredTracks.length > 0) {
+                saveFailedTracks(failedTracks);
+            }
+            return;
+        }
 
         // 第三步：执行重试逻辑
         if (enableBatch) { // 批量上报
@@ -181,4 +186,3 @@ export const retryFailedTracks = async (force = false) => {
         isRetryRunning = false;
     }
 };
-
